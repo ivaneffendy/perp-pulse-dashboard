@@ -1,0 +1,6 @@
+name = "perp-pulse-data"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+# Free plan is fine: 100k requests/day. No KV/DO/secrets needed for v1 —
+# this Worker is a stateless read-through proxy.

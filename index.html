@@ -59,6 +59,21 @@
   .stat .sub{font-size:11px; color:var(--muted); margin-top:4px}
   .pos{color:var(--up)} .neg{color:var(--down)} .warn{color:var(--warn)}
 
+  /* Order-book walls */
+  .book{
+    background:var(--card); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px; margin-top:12px;
+  }
+  .book .label{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:10px}
+  .wall-row{display:flex; align-items:baseline; gap:8px; font-variant-numeric:tabular-nums}
+  .wall-row .side{font-size:11px; color:var(--muted); width:64px; flex:none}
+  .wall-row .wprice{font-size:15px; font-weight:500}
+  .wall-row .wdist{font-size:12px}
+  .wall-row .wsize{font-size:11px; color:var(--muted); margin-left:auto}
+  .imbal{height:6px; border-radius:3px; background:var(--down); margin:10px 0; overflow:hidden; position:relative}
+  .imbal-fill{height:100%; background:var(--up); width:50%; transition:width .3s}
+  .imbal-cap{font-size:11px; color:var(--muted); display:flex; justify-content:space-between}
+
   footer{margin-top:14px; font-size:11px; color:var(--muted); display:flex; justify-content:space-between}
   #err{
     display:none; background:#2A1215; border:1px solid #5C2226; color:#F2B8B5;
@@ -94,10 +109,18 @@
 <div class="grid">
   <div class="stat"><div class="label">Funding rate</div><div class="val" id="funding">—</div><div class="sub" id="funding-sub"></div></div>
   <div class="stat"><div class="label">Next funding</div><div class="val" id="nextf">—</div><div class="sub">countdown</div></div>
-  <div class="stat"><div class="label">Open interest</div><div class="val" id="oi">—</div><div class="sub" id="oi-usd"></div></div>
-  <div class="stat"><div class="label">OI Δ 1h / 4h</div><div class="val" id="oid">—</div><div class="sub">futures positioning</div></div>
+  <div class="stat"><div class="label">Open interest (agg)</div><div class="val" id="oi">—</div><div class="sub" id="oi-usd"></div></div>
+  <div class="stat"><div class="label">OI Δ 1h / 4h</div><div class="val" id="oid">—</div><div class="sub">Binance positioning</div></div>
   <div class="stat"><div class="label">Taker buy/sell</div><div class="val" id="taker">—</div><div class="sub">1h aggressor flow</div></div>
   <div class="stat"><div class="label">Top trader L/S</div><div class="val" id="topls">—</div><div class="sub">positions, 1h</div></div>
+</div>
+
+<div class="book">
+  <div class="label">Order-book walls (nearest resting liquidity)</div>
+  <div class="wall-row"><span class="side">Ask wall</span><span class="wprice" id="askw">—</span><span class="wdist neg" id="askd"></span><span class="wsize" id="asksz"></span></div>
+  <div class="imbal"><div class="imbal-fill" id="imbalfill"></div></div>
+  <div class="imbal-cap"><span id="imbal-bid">bid —</span><span id="imbal-ask">— ask</span></div>
+  <div class="wall-row"><span class="side">Bid wall</span><span class="wprice" id="bidw">—</span><span class="wdist pos" id="bidd"></span><span class="wsize" id="bidsz"></span></div>
 </div>
 
 <footer>
@@ -106,106 +129,18 @@
 </footer>
 
 <script>
+// The data proxy Worker. Set it once via ?api=<url> (saved to localStorage),
+// or hardcode your deployed Worker URL below.
+const params = new URLSearchParams(location.search);
+if (params.get('api')) localStorage.setItem('ppd_api', params.get('api'));
+const WORKER_URL = params.get('api')
+  || localStorage.getItem('ppd_api')
+  || 'https://perp-pulse-data.YOUR-SUBDOMAIN.workers.dev';
+
 const $ = id => document.getElementById(id);
 const fmtPct = (v, dp=2) => (v>=0?'+':'') + v.toFixed(dp) + '%';
 const cls = v => v>=0 ? 'pos' : 'neg';
 const fmtUsd = v => v>=1e9 ? '$'+(v/1e9).toFixed(2)+'B' : '$'+(v/1e6).toFixed(0)+'M';
-
-async function j(url){
-  const r = await fetch(url);
-  if(!r.ok) throw new Error(url+' -> '+r.status);
-  return r.json();
-}
-
-async function fromBinance(){
-  const B='https://fapi.binance.com';
-  const [t24, prem, kl, oiHist, taker, topls] = await Promise.all([
-    j(B+'/fapi/v1/ticker/24hr?symbol=BTCUSDT'),
-    j(B+'/fapi/v1/premiumIndex?symbol=BTCUSDT'),
-    j(B+'/fapi/v1/klines?symbol=BTCUSDT&interval=1h&limit=5'),
-    j(B+'/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&limit=5'),
-    j(B+'/futures/data/takerlongshortRatio?symbol=BTCUSDT&period=1h&limit=1'),
-    j(B+'/futures/data/topLongShortPositionRatio?symbol=BTCUSDT&period=1h&limit=1'),
-  ]);
-  const px = +prem.markPrice;
-  const closes = kl.map(k=>+k[4]);
-  const oiNow = +oiHist[4].sumOpenInterest, oi1h = +oiHist[3].sumOpenInterest, oi4h = +oiHist[0].sumOpenInterest;
-  return {
-    source:'Binance USDT-M',
-    px,
-    chg1h:(px/closes[3]-1)*100,
-    chg4h:(px/closes[0]-1)*100,
-    chg24h:+t24.priceChangePercent,
-    funding:+prem.lastFundingRate*100,
-    nextFundingTime:+prem.nextFundingTime,
-    oiBtc:oiNow,
-    oiUsd:+oiHist[4].sumOpenInterestValue,
-    oiD1h:(oiNow/oi1h-1)*100,
-    oiD4h:(oiNow/oi4h-1)*100,
-    taker:+taker[0].buySellRatio,
-    topls:+topls[0].longShortRatio,
-  };
-}
-
-async function fromBybit(){
-  const B='https://api.bybit.com';
-  const [tick, kl, oiH] = await Promise.all([
-    j(B+'/v5/market/tickers?category=linear&symbol=BTCUSDT'),
-    j(B+'/v5/market/kline?category=linear&symbol=BTCUSDT&interval=60&limit=5'),
-    j(B+'/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=5'),
-  ]);
-  const t = tick.result.list[0];
-  const px = +t.lastPrice;
-  const closes = kl.result.list.map(k=>+k[4]); // newest first
-  const oiL = oiH.result.list; // newest first
-  const oiNow = +oiL[0].openInterest, oi1h=+oiL[1].openInterest, oi4h=+oiL[4].openInterest;
-  return {
-    source:'Bybit linear (fallback)',
-    px,
-    chg1h:(px/closes[1]-1)*100,
-    chg4h:(px/closes[4]-1)*100,
-    chg24h:+t.price24hPcnt*100,
-    funding:+t.fundingRate*100,
-    nextFundingTime:+t.nextFundingTime,
-    oiBtc:oiNow,
-    oiUsd:oiNow*px,
-    oiD1h:(oiNow/oi1h-1)*100,
-    oiD4h:(oiNow/oi4h-1)*100,
-    taker:null,
-    topls:null,
-  };
-}
-
-function verdict(d){
-  const pDown = d.chg1h < -0.15, pUp = d.chg1h > 0.15;
-  const oiDown = d.oiD1h < -0.25, oiUp = d.oiD1h > 0.25;
-  let cls='mixed', msg;
-
-  if(pDown && oiDown){
-    cls='ok';
-    msg=`Price down ${d.chg1h.toFixed(2)}% with OI dropping ${d.oiD1h.toFixed(2)}% — longs closing or getting flushed, not fresh selling. Deleveraging pullback; POI mitigation has better odds of holding.`;
-  } else if(pDown && oiUp){
-    cls='risk';
-    msg=`Price down ${d.chg1h.toFixed(2)}% while OI is building ${fmtPct(d.oiD1h)} — new shorts opening into the move. This is aggressive selling, not a healthy pullback. Wait for stronger confirmation.`;
-  } else if(pUp && oiUp){
-    cls='ok';
-    msg=`Price up ${fmtPct(d.chg1h)} with OI expanding ${fmtPct(d.oiD1h)} — fresh longs backing the move with new money.`;
-  } else if(pUp && oiDown){
-    cls='mixed';
-    msg=`Price up ${fmtPct(d.chg1h)} but OI shrinking ${d.oiD1h.toFixed(2)}% — likely short covering, weaker fuel for continuation.`;
-  } else {
-    msg=`Flat hour (${fmtPct(d.chg1h)} price, ${fmtPct(d.oiD1h)} OI). No strong positioning signal — lean on your HTF structure.`;
-  }
-
-  if(d.funding <= -0.01) msg += ` Funding is negative (${d.funding.toFixed(4)}%): shorts paying, crowded downside — squeeze fuel.`;
-  else if(d.funding >= 0.02) msg += ` Funding elevated (${d.funding.toFixed(4)}%): longs crowded, watch for a flush.`;
-
-  if(d.taker !== null){
-    if(d.taker < 0.9) msg += ` Taker flow ${d.taker.toFixed(2)} — sellers hitting market.`;
-    else if(d.taker > 1.1) msg += ` Taker flow ${d.taker.toFixed(2)} — buyers lifting offers.`;
-  }
-  return {cls, msg};
-}
 
 function countdown(ts){
   const s = Math.max(0, ts - Date.now());
@@ -214,25 +149,54 @@ function countdown(ts){
 }
 
 function render(d){
-  $('px').textContent = d.px.toLocaleString('en-US',{maximumFractionDigits:1});
-  for(const [id,v] of [['chg1h',d.chg1h],['chg4h',d.chg4h],['chg24h',d.chg24h]]){
+  const p = d.price;
+  $('px').textContent = p.mark.toLocaleString('en-US',{maximumFractionDigits:1});
+  for(const [id,v] of [['chg1h',p.chg1h],['chg4h',p.chg4h],['chg24h',p.chg24h]]){
     $(id).textContent = id.replace('chg','')+' '+fmtPct(v);
     $(id).className = 'chg '+cls(v);
   }
-  $('funding').textContent = d.funding.toFixed(4)+'%';
-  $('funding').className = 'val '+(d.funding>=0.02?'warn':d.funding<0?'neg':'');
-  $('funding-sub').textContent = 'annualized ~'+(d.funding*3*365).toFixed(1)+'%';
-  $('nextf').textContent = countdown(d.nextFundingTime);
-  $('oi').textContent = (d.oiBtc/1000).toFixed(1)+'k BTC';
-  $('oi-usd').textContent = fmtUsd(d.oiUsd);
-  $('oid').innerHTML = `<span class="${cls(d.oiD1h)}">${fmtPct(d.oiD1h)}</span> / <span class="${cls(d.oiD4h)}">${fmtPct(d.oiD4h)}</span>`;
-  $('taker').textContent = d.taker===null?'n/a':d.taker.toFixed(3);
-  $('topls').textContent = d.topls===null?'n/a':d.topls.toFixed(3);
-  const v = verdict(d);
+
+  const f = d.funding;
+  $('funding').textContent = f.rate.toFixed(4)+'%';
+  $('funding').className = 'val '+(f.rate>=0.02?'warn':f.rate<0?'neg':'');
+  $('funding-sub').textContent = 'annualized ~'+(f.rate*3*365).toFixed(1)+'%';
+  $('nextf').textContent = countdown(f.nextFundingTime);
+
+  const oi = d.oi;
+  $('oi').textContent = (oi.aggBtc/1000).toFixed(1)+'k BTC';
+  const nVenues = Object.values(oi.venues).filter(v=>v!=null).length;
+  $('oi-usd').textContent = fmtUsd(oi.aggUsd)+' · '+nVenues+' venues';
+  $('oid').innerHTML = `<span class="${cls(oi.d1h)}">${fmtPct(oi.d1h)}</span> / <span class="${cls(oi.d4h)}">${fmtPct(oi.d4h)}</span>`;
+
+  const pos = d.positioning;
+  $('taker').textContent = pos.taker==null?'n/a':pos.taker.toFixed(3);
+  $('topls').textContent = pos.topLS==null?'n/a':pos.topLS.toFixed(3);
+
+  // Order-book walls
+  const bk = d.book;
+  if(bk && bk.askWall){
+    $('askw').textContent = bk.askWall.price.toLocaleString('en-US',{maximumFractionDigits:0});
+    $('askd').textContent = fmtPct(bk.askWall.distPct);
+    $('asksz').textContent = bk.askWall.size.toFixed(1)+' BTC';
+  }
+  if(bk && bk.bidWall){
+    $('bidw').textContent = bk.bidWall.price.toLocaleString('en-US',{maximumFractionDigits:0});
+    $('bidd').textContent = fmtPct(bk.bidWall.distPct);
+    $('bidsz').textContent = bk.bidWall.size.toFixed(1)+' BTC';
+  }
+  if(bk){
+    const bidShare = Math.round(bk.imbalancePct);
+    $('imbalfill').style.width = bidShare+'%';
+    $('imbal-bid').textContent = 'bid '+bidShare+'%';
+    $('imbal-ask').textContent = (100-bidShare)+'% ask';
+  }
+
+  // Verdict (computed server-side, single source of truth)
   const vd = $('verdict');
-  vd.className = 'verdict '+v.cls;
-  $('verdict-text').textContent = v.msg;
+  vd.className = 'verdict '+d.verdict.cls;
+  $('verdict-text').textContent = d.verdict.msg;
   $('verdict-text').classList.remove('skeleton');
+
   $('src').textContent = 'source: '+d.source;
   $('ts').textContent = new Date().toLocaleTimeString();
 }
@@ -243,13 +207,17 @@ async function load(){
   $('err').style.display='none';
   document.body.classList.add('updating');
   try{
-    let d;
-    try{ d = await fromBinance(); }
-    catch(e){ d = await fromBybit(); }
+    const r = await fetch(WORKER_URL);
+    const d = await r.json();
+    if(!r.ok || d.error) throw new Error(d.detail || d.error || ('HTTP '+r.status));
     render(d);
   }catch(e){
     $('err').style.display='block';
-    $('err').textContent = 'Could not reach Binance or Bybit public APIs. Check your connection — some networks or regions block exchange endpoints. ('+e.message+')';
+    if(WORKER_URL.includes('YOUR-SUBDOMAIN')){
+      $('err').textContent = 'No data proxy configured yet. Deploy the Worker, then open this page with ?api=<your-worker-url> once (it will be remembered).';
+    }else{
+      $('err').textContent = 'Could not reach the data proxy. ('+e.message+')';
+    }
   }finally{
     btn.disabled = false; btn.textContent = 'Refresh';
     document.body.classList.remove('updating');
