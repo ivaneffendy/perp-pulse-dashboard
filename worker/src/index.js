@@ -1,14 +1,16 @@
 /**
  * BTC Pulse — data proxy Worker
  *
- * Why this exists: the browser can't fetch exchange APIs directly (CORS is not
- * sent by Binance's `futures/data/*` endpoints, and `fapi` is geo-blocked in
- * some regions). This Worker fetches everything at Cloudflare's edge and returns
- * ONE JSON payload with permissive CORS, so the static page just calls this.
+ * Why this exists: the browser can't fetch exchange APIs directly (CORS + geo).
+ * This Worker fetches at Cloudflare's edge and returns ONE JSON payload with
+ * permissive CORS, so the static page just calls this.
  *
- * Scope (v1): BTC perps confluence snapshot — price, funding, aggregated OI
- * across Binance+Bybit+OKX, positioning (taker / top-trader L/S), and the
- * nearest order-book walls. All free, all snapshot (no persistent state).
+ * IMPORTANT regional reality: Binance (fapi.binance.com) is geo-blocked in
+ * Indonesia and the Cloudflare edge nearest the user (Jakarta) hits the same
+ * block, so Binance calls fail. Therefore this Worker is built on **Bybit +
+ * OKX** (both reachable) and treats Binance as an OPPORTUNISTIC bonus only.
+ * Every field has a Bybit/OKX source so the dashboard is fully populated even
+ * with Binance down. The `diag` field reports which venues answered.
  */
 
 const CORS = {
@@ -17,35 +19,32 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-// Cache each upstream call briefly at the edge so rapid refreshes don't hammer
-// the exchanges (and stay well inside rate limits).
-const EDGE_TTL = 5; // seconds
+const EDGE_TTL = 5; // seconds — brief edge cache so rapid refreshes stay polite
 
 async function j(url) {
   const r = await fetch(url, { cf: { cacheTtl: EDGE_TTL, cacheEverything: true } });
-  if (!r.ok) throw new Error(`${url} -> ${r.status}`);
+  if (!r.ok) throw new Error(`${url.replace(/\?.*/, '')} -> ${r.status}`);
   return r.json();
 }
 
-// Settle-all helper: never let one dead venue sink the whole response.
-async function safe(promise, label) {
+// Run a source, capturing success value or error message (for diag).
+async function attempt(fn) {
   try {
-    return await promise;
+    return { ok: true, val: await fn() };
   } catch (e) {
-    console.log(`[${label}] ${e.message}`);
-    return null;
+    return { ok: false, err: e.message };
   }
 }
 
 /**
- * Order-book walls from a REST depth snapshot.
- * The visible REST book is shallow (~0.1% of price), so "nearest wall" means the
- * heaviest cluster of resting size right around price — exactly what matters when
- * price is approaching a POI. We bucket levels into ~0.05%-wide price bins and
- * pick the heaviest bin on each side, plus the visible-book bid/ask imbalance.
+ * Order-book walls from a REST depth snapshot. The visible REST book is shallow
+ * (~0.1% of price), so "nearest wall" = heaviest cluster of resting size right
+ * around price. We bucket levels into ~0.05%-wide bins, pick the heaviest bin
+ * each side, plus the visible-book bid/ask imbalance.
+ * `levels` = array of [priceStr, qtyStr].
  */
 function computeWalls(bids, asks, mid) {
-  const binSize = Math.max(1, Math.round(mid * 0.0005)); // ~0.05% of price
+  const binSize = Math.max(1, Math.round(mid * 0.0005));
   const bucket = (levels) => {
     const bins = new Map();
     let vol = 0;
@@ -57,79 +56,41 @@ function computeWalls(bids, asks, mid) {
       bins.set(key, (bins.get(key) || 0) + qty);
     }
     let wall = null;
-    for (const [price, size] of bins) {
-      if (!wall || size > wall.size) wall = { price, size };
-    }
+    for (const [price, size] of bins) if (!wall || size > wall.size) wall = { price, size };
     if (wall) wall.distPct = (wall.price / mid - 1) * 100;
     return { wall, vol };
   };
-
-  const b = bucket(bids);
-  const a = bucket(asks);
+  const b = bucket(bids), a = bucket(asks);
   const total = b.vol + a.vol;
   return {
-    bidWall: b.wall,   // { price, size (BTC), distPct (negative) }
-    askWall: a.wall,   // { price, size (BTC), distPct (positive) }
+    bidWall: b.wall,
+    askWall: a.wall,
     bidVol: b.vol,
     askVol: a.vol,
-    imbalancePct: total ? (b.vol / total) * 100 : 50, // >50 = more resting bids
+    imbalancePct: total ? (b.vol / total) * 100 : 50,
   };
 }
 
-async function fromBinance() {
-  const B = 'https://fapi.binance.com';
-  const S = 'BTCUSDT';
-  const [t24, prem, kl, oiHist, taker, topls, depth] = await Promise.all([
-    j(`${B}/fapi/v1/ticker/24hr?symbol=${S}`),
-    j(`${B}/fapi/v1/premiumIndex?symbol=${S}`),
-    j(`${B}/fapi/v1/klines?symbol=${S}&interval=1h&limit=5`),
-    j(`${B}/futures/data/openInterestHist?symbol=${S}&period=1h&limit=5`),
-    j(`${B}/futures/data/takerlongshortRatio?symbol=${S}&period=1h&limit=1`),
-    j(`${B}/futures/data/topLongShortPositionRatio?symbol=${S}&period=1h&limit=1`),
-    j(`${B}/fapi/v1/depth?symbol=${S}&limit=1000`),
-  ]);
-
-  const mark = +prem.markPrice;
-  const closes = kl.map((k) => +k[4]);
-  const oiNow = +oiHist[4].sumOpenInterest;
-  const oi1h = +oiHist[3].sumOpenInterest;
-  const oi4h = +oiHist[0].sumOpenInterest;
-
-  return {
-    source: 'Binance USDT-M',
-    mark,
-    chg1h: (mark / closes[3] - 1) * 100,
-    chg4h: (mark / closes[0] - 1) * 100,
-    chg24h: +t24.priceChangePercent,
-    funding: +prem.lastFundingRate * 100,
-    nextFundingTime: +prem.nextFundingTime,
-    oiBtc: oiNow,
-    oiUsd: +oiHist[4].sumOpenInterestValue,
-    oiD1h: (oiNow / oi1h - 1) * 100,
-    oiD4h: (oiNow / oi4h - 1) * 100,
-    taker: +taker[0].buySellRatio,
-    topLS: +topls[0].longShortRatio,
-    book: computeWalls(depth.bids, depth.asks, mark),
-  };
-}
-
-async function fromBybit() {
+/* ------------------------------ Bybit (core) ------------------------------ */
+// Primary source: price, funding, OI + deltas, order-book walls. Reachable.
+async function bybit() {
   const B = 'https://api.bybit.com';
   const S = 'BTCUSDT';
-  const [tick, kl, oiH, ob] = await Promise.all([
+  const [tick, kl, oiH, ob, acct] = await Promise.all([
     j(`${B}/v5/market/tickers?category=linear&symbol=${S}`),
     j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=60&limit=5`),
     j(`${B}/v5/market/open-interest?category=linear&symbol=${S}&intervalTime=1h&limit=5`),
     j(`${B}/v5/market/orderbook?category=linear&symbol=${S}&limit=200`),
+    j(`${B}/v5/market/account-ratio?category=linear&symbol=${S}&period=1h&limit=1`).catch(() => null),
   ]);
   const t = tick.result.list[0];
   const mark = +t.lastPrice;
   const closes = kl.result.list.map((k) => +k[4]); // newest first
   const oiL = oiH.result.list; // newest first
   const oiNow = +oiL[0].openInterest, oi1h = +oiL[1].openInterest, oi4h = +oiL[4].openInterest;
-
+  const ratio = acct && acct.result && acct.result.list && acct.result.list[0];
   return {
-    source: 'Bybit linear (fallback)',
+    source: 'Bybit linear',
     mark,
     chg1h: (mark / closes[1] - 1) * 100,
     chg4h: (mark / closes[4] - 1) * 100,
@@ -140,20 +101,51 @@ async function fromBybit() {
     oiUsd: oiNow * mark,
     oiD1h: (oiNow / oi1h - 1) * 100,
     oiD4h: (oiNow / oi4h - 1) * 100,
-    taker: null,
-    topLS: null,
     book: computeWalls(ob.result.b, ob.result.a, mark),
+    // Bybit account long/short ratio (fallback for positioning)
+    accountLS: ratio ? +ratio.buyRatio / +ratio.sellRatio : null,
   };
 }
 
-// OI-only helpers for the cross-venue aggregate (BTC-denominated).
-async function bybitOiBtc() {
-  const d = await j('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT');
-  return +d.result.list[0].openInterest; // linear USDT perp OI is in BTC
+/* ------------------------------ OKX (extras) ------------------------------ */
+// OI (BTC) + taker buy/sell + long/short account ratio. Reachable; replaces the
+// Binance-only positioning signals.
+async function okx() {
+  const O = 'https://www.okx.com';
+  const [oi, taker, ls] = await Promise.all([
+    j(`${O}/api/v5/public/open-interest?instId=BTC-USDT-SWAP`),
+    j(`${O}/api/v5/rubik/stat/taker-volume?ccy=BTC&instType=CONTRACTS&period=1H`).catch(() => null),
+    j(`${O}/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=BTC&period=1H`).catch(() => null),
+  ]);
+  const oiBtc = +oi.data[0].oiCcy;
+  // taker-volume rows: [ts, sellVol, buyVol] (newest first)
+  let takerRatio = null;
+  if (taker && taker.data && taker.data[0]) {
+    const sell = +taker.data[0][1], buy = +taker.data[0][2];
+    takerRatio = sell ? buy / sell : null;
+  }
+  // long-short-account-ratio rows: [ts, ratio] (newest first)
+  let lsRatio = null;
+  if (ls && ls.data && ls.data[0]) lsRatio = +ls.data[0][1];
+  return { oiBtc, taker: takerRatio, ls: lsRatio };
 }
-async function okxOiBtc() {
-  const d = await j('https://www.okx.com/api/v5/public/open-interest?instId=BTC-USDT-SWAP');
-  return +d.data[0].oiCcy; // OI expressed in BTC
+
+/* ----------------------- Binance (opportunistic only) --------------------- */
+// If reachable (it usually isn't, from ID/Jakarta), gives the richest data:
+// its own OI, taker buy/sell, and TOP-trader L/S. Never depended upon.
+async function binance() {
+  const B = 'https://fapi.binance.com';
+  const S = 'BTCUSDT';
+  const [oiHist, taker, topls] = await Promise.all([
+    j(`${B}/futures/data/openInterestHist?symbol=${S}&period=1h&limit=1`),
+    j(`${B}/futures/data/takerlongshortRatio?symbol=${S}&period=1h&limit=1`),
+    j(`${B}/futures/data/topLongShortPositionRatio?symbol=${S}&period=1h&limit=1`),
+  ]);
+  return {
+    oiBtc: +oiHist[0].sumOpenInterest,
+    taker: +taker[0].buySellRatio,
+    topLS: +topls[0].longShortRatio,
+  };
 }
 
 function verdict(d) {
@@ -185,7 +177,6 @@ function verdict(d) {
     else if (d.taker > 1.1) msg += ` Taker flow ${d.taker.toFixed(2)} — buyers lifting offers.`;
   }
 
-  // Order-book wall read: which side is the nearer magnet + resting imbalance.
   const bk = d.book;
   if (bk && bk.bidWall && bk.askWall) {
     const askD = bk.askWall.distPct, bidD = Math.abs(bk.bidWall.distPct);
@@ -193,57 +184,69 @@ function verdict(d) {
     const skew = bk.imbalancePct >= 55 ? 'bids stacked' : bk.imbalancePct <= 45 ? 'asks stacked' : 'balanced';
     msg += ` Book: nearest ${nearer} wall ${nearer === 'ask' ? '+' : '-'}${(nearer === 'ask' ? askD : bidD).toFixed(2)}%, resting ${skew} (${bk.imbalancePct.toFixed(0)}% bid).`;
   }
-
   return { cls, msg };
 }
 
 export default {
   async fetch(request) {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: CORS });
-    }
+    if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+    const debug = new URL(request.url).searchParams.has('debug');
 
-    try {
-      // Primary snapshot: Binance, fall back to Bybit for the core read.
-      let d = await safe(fromBinance(), 'binance');
-      if (!d) d = await fromBybit(); // let this throw if both are dead
+    // Fetch all three venues concurrently; Bybit is the required core.
+    const [by, ok, bn] = await Promise.all([attempt(bybit), attempt(okx), attempt(binance)]);
 
-      // Cross-venue aggregate OI (best-effort; missing venues just drop out).
-      const [bybOi, okxOi] = await Promise.all([
-        safe(bybitOiBtc(), 'bybit-oi'),
-        safe(okxOiBtc(), 'okx-oi'),
-      ]);
-      const venues = { binance: d.source.startsWith('Binance') ? d.oiBtc : null, bybit: bybOi, okx: okxOi };
-      const parts = Object.values(venues).filter((v) => v != null);
-      const aggBtc = parts.reduce((s, v) => s + v, 0);
-
-      const payload = {
-        ts: Date.now(),
-        source: d.source,
-        price: { mark: d.mark, chg1h: d.chg1h, chg4h: d.chg4h, chg24h: d.chg24h },
-        funding: { rate: d.funding, nextFundingTime: d.nextFundingTime },
-        oi: {
-          btc: d.oiBtc,
-          usd: d.oiUsd,
-          d1h: d.oiD1h,
-          d4h: d.oiD4h,
-          aggBtc,
-          aggUsd: aggBtc * d.mark,
-          venues,
-        },
-        positioning: { taker: d.taker, topLS: d.topLS },
-        book: d.book,
-        verdict: verdict(d),
-      };
-
-      return new Response(JSON.stringify(payload), {
-        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS },
-      });
-    } catch (e) {
+    if (!by.ok) {
       return new Response(
-        JSON.stringify({ error: 'Upstream exchanges unreachable', detail: e.message }),
+        JSON.stringify({ error: 'Core source (Bybit) unreachable', detail: by.err, diag: { okx: ok.ok, binance: bn.ok } }),
         { status: 502, headers: { 'Content-Type': 'application/json', ...CORS } }
       );
     }
+
+    const core = by.val;
+    const okv = ok.ok ? ok.val : null;
+    const bnv = bn.ok ? bn.val : null;
+
+    // Aggregated OI (BTC) across whatever venues answered.
+    const venues = {
+      binance: bnv ? bnv.oiBtc : null,
+      bybit: core.oiBtc,
+      okx: okv ? okv.oiBtc : null,
+    };
+    const aggBtc = Object.values(venues).filter((v) => v != null).reduce((s, v) => s + v, 0);
+
+    // Positioning: prefer Binance (top-trader) → OKX → Bybit account ratio.
+    const taker = (bnv && bnv.taker) ?? (okv && okv.taker) ?? null;
+    const topLS = (bnv && bnv.topLS) ?? (okv && okv.ls) ?? core.accountLS ?? null;
+    const posSource = bnv && bnv.topLS != null ? 'Binance top-trader'
+      : okv && okv.ls != null ? 'OKX accounts'
+      : core.accountLS != null ? 'Bybit accounts' : 'n/a';
+
+    const d = {
+      mark: core.mark, chg1h: core.chg1h, chg4h: core.chg4h, chg24h: core.chg24h,
+      funding: core.funding, oiD1h: core.oiD1h, book: core.book, taker,
+    };
+
+    const payload = {
+      ts: Date.now(),
+      source: core.source + (bnv ? ' + Binance' : '') + (okv ? ' + OKX' : ''),
+      price: { mark: core.mark, chg1h: core.chg1h, chg4h: core.chg4h, chg24h: core.chg24h },
+      funding: { rate: core.funding, nextFundingTime: core.nextFundingTime },
+      oi: { btc: core.oiBtc, usd: core.oiUsd, d1h: core.oiD1h, d4h: core.oiD4h, aggBtc, aggUsd: aggBtc * core.mark, venues },
+      positioning: { taker, topLS, source: posSource },
+      book: core.book,
+      verdict: verdict(d),
+    };
+
+    if (debug) {
+      payload.diag = {
+        bybit: by.ok ? 'ok' : by.err,
+        okx: ok.ok ? 'ok' : ok.err,
+        binance: bn.ok ? 'ok' : bn.err,
+      };
+    }
+
+    return new Response(JSON.stringify(payload), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS },
+    });
   },
 };

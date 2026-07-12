@@ -112,7 +112,7 @@
   <div class="stat"><div class="label">Open interest (agg)</div><div class="val" id="oi">—</div><div class="sub" id="oi-usd"></div></div>
   <div class="stat"><div class="label">OI Δ 1h / 4h</div><div class="val" id="oid">—</div><div class="sub">Binance positioning</div></div>
   <div class="stat"><div class="label">Taker buy/sell</div><div class="val" id="taker">—</div><div class="sub">1h aggressor flow</div></div>
-  <div class="stat"><div class="label">Top trader L/S</div><div class="val" id="topls">—</div><div class="sub">positions, 1h</div></div>
+  <div class="stat"><div class="label">Long / short</div><div class="val" id="topls">—</div><div class="sub" id="topls-sub">positions, 1h</div></div>
 </div>
 
 <div class="book">
@@ -171,6 +171,7 @@ function render(d){
   const pos = d.positioning;
   $('taker').textContent = pos.taker==null?'n/a':pos.taker.toFixed(3);
   $('topls').textContent = pos.topLS==null?'n/a':pos.topLS.toFixed(3);
+  if(pos.source) $('topls-sub').textContent = pos.source;
 
   // Order-book walls
   const bk = d.book;
