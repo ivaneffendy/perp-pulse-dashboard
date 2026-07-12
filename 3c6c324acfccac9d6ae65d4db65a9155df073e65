@@ -1,0 +1,23 @@
+index.html
+  80ab2480de216d57 138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "3c6c324acfccac9d6ae65d4db65a9155df073e65",
+  "prompts": {
+    "80ab2480de216d57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad9dee3a-3bd8-4e47-b942-64d7e1695ace",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Ivan Halim <ivan.halim@gdn-commerce.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
