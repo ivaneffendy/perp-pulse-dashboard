@@ -135,7 +135,7 @@ const params = new URLSearchParams(location.search);
 if (params.get('api')) localStorage.setItem('ppd_api', params.get('api'));
 const WORKER_URL = params.get('api')
   || localStorage.getItem('ppd_api')
-  || 'https://perp-pulse-data.YOUR-SUBDOMAIN.workers.dev';
+  || 'https://perp-pulse-data.perp-pulse-data.workers.dev';
 
 const $ = id => document.getElementById(id);
 const fmtPct = (v, dp=2) => (v>=0?'+':'') + v.toFixed(dp) + '%';
