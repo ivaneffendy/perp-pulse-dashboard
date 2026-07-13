@@ -14,11 +14,25 @@ Owner is a software engineer, so code work is fine.
 
 ```
 Phone browser
-  → GitHub Pages         static page (index.html) — thin renderer, no logic
-       → Cloudflare Worker  (worker/) fetches exchanges server-side, computes
-                             the verdict, returns ONE JSON payload with CORS
-            → Binance fapi / Bybit / OKX  public REST
+  → GitHub Pages          static page (index.html)
+       → Cloudflare Worker  (worker/) — CORE data. Fetches Bybit + OKX
+       │                     server-side, computes the verdict, returns JSON.
+       │      → Bybit / OKX public REST   (reachable from the edge)
+       │      → Binance fapi              (OPPORTUNISTIC — usually geo-blocked)
+       └→ Binance fapi DIRECT (hybrid enrichment, client-side)
+              Runs from the USER's device. On phone/VPN it reaches Binance and
+              enriches taker + top-trader L/S + OI; on blocked networks it
+              times out silently and the OKX/Bybit baseline stands.
 ```
+
+### Regional reality (important)
+Binance (`fapi.binance.com`) is **geo-blocked in Indonesia**, and the Cloudflare
+edge nearest the user (Jakarta) hits the same block — so the Worker cannot rely
+on Binance. The Worker therefore runs on **Bybit (core) + OKX (extras)**. Binance
+is recovered two ways: (1) opportunistically inside the Worker if ever reachable,
+and (2) a **hybrid client-side fetch** in `index.html` that uses the *user's own*
+network (phone/VPN can reach Binance even when the edge can't). Both degrade
+gracefully to the OKX/Bybit baseline.
 
 - **`index.html`** — single-file dashboard. Pure renderer: it fetches the
   Worker and paints the payload. It contains **no** market logic. Deployed via
