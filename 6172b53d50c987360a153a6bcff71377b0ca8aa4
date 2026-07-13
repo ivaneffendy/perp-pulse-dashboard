@@ -1,0 +1,25 @@
+CLAUDE.md
+  80ab2480de216d57 17-25,28-35
+index.html
+  80ab2480de216d57 205-245,256
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "6172b53d50c987360a153a6bcff71377b0ca8aa4",
+  "prompts": {
+    "80ab2480de216d57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad9dee3a-3bd8-4e47-b942-64d7e1695ace",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 60,
+      "total_deletions": 4,
+      "accepted_lines": 60,
+      "overriden_lines": 0
+    }
+  }
+}
