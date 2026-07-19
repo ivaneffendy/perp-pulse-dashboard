@@ -75,12 +75,12 @@ async function attempt(fn) {
  */
 const BAND = 0.005;       // ±0.5% target search window
 const BIN_PCT = 0.0005;   // 0.05% price bins
-const WALL_MULT = 3;      // >= 3x median bin depth
-const WALL_SHARE = 0.15;  // >= 15% of that side's in-band volume
+const WALL_MULT = 3;      // >= 3x median bin depth (defines an outlier)
+const WALL_SHARE = 0.06;  // >= 6% of that side's in-band volume (materiality floor)
 const MIN_BINS = 4;       // need this many in-band bins before judging significance
 
 function sideWalls(levels, mid, sign) {
-  const binSize = Math.max(1, Math.round(mid * BIN_PCT));
+  const binSize = mid * BIN_PCT; // price-relative; must NOT floor at 1 (breaks sub-$1 coins)
   const bins = new Map();
   let vol = 0, covered = 0;
   for (const lvl of levels) {
@@ -96,20 +96,34 @@ function sideWalls(levels, mid, sign) {
   const arr = [...bins.entries()]
     .map(([price, size]) => ({ price, size, distPct: (price / mid - 1) * 100 }))
     .sort((a, b) => Math.abs(a.distPct) - Math.abs(b.distPct)); // nearest first
-  let nearestWall = null, maxWall = null;
-  if (arr.length >= MIN_BINS) {
-    const cand = arr.slice(1); // drop innermost bin (the spread)
+  const cand = arr.slice(1); // drop innermost bin (the spread / top-of-book)
+  let median = 0, threshold = 0, nearestWall = null, maxWall = null;
+  if (cand.length) {
     const sizes = cand.map((c) => c.size).sort((a, b) => a - b);
-    const median = sizes[Math.floor(sizes.length / 2)] || 0;
-    const threshold = Math.max(WALL_MULT * median, WALL_SHARE * vol);
-    const qualifying = cand.filter((c) => c.size >= threshold);
-    if (qualifying.length) {
-      nearestWall = qualifying[0]; // cand is nearest-first
-      maxWall = qualifying.reduce((m, c) => (c.size > m.size ? c : m), qualifying[0]);
+    median = sizes[Math.floor(sizes.length / 2)] || 0;
+    threshold = Math.max(WALL_MULT * median, WALL_SHARE * vol);
+    if (arr.length >= MIN_BINS) {
+      const q = cand.filter((c) => c.size >= threshold);
+      if (q.length) {
+        nearestWall = q[0]; // cand is nearest-first
+        maxWall = q.reduce((m, c) => (c.size > m.size ? c : m), q[0]);
+      }
     }
   }
   const fmt = (w) => (w ? { price: w.price, size: +w.size.toFixed(2), distPct: w.distPct } : null);
-  return { nearestWall: fmt(nearestWall), maxWall: fmt(maxWall), vol, coveredPct: covered * 100 };
+  return {
+    nearestWall: fmt(nearestWall),
+    maxWall: fmt(maxWall),
+    vol,
+    coveredPct: covered * 100,
+    // Tuning aid, stripped from the response unless ?bins is present.
+    dbg: {
+      binCount: arr.length,
+      median: +median.toFixed(4),
+      threshold: +threshold.toFixed(4),
+      top: cand.slice(0, 6).map((c) => ({ distPct: +c.distPct.toFixed(3), size: +c.size.toFixed(3) })),
+    },
+  };
 }
 
 function computeWalls(bids, asks) {
@@ -171,12 +185,14 @@ async function bybit(sym) {
 async function okx(sym) {
   const O = 'https://www.okx.com';
   const inst = sym.okxInst, ccy = sym.okxCcy;
-  const [oi, taker, ls, ob] = await Promise.all([
+  const [oi, taker, ls, ob, instr] = await Promise.all([
     j(`${O}/api/v5/public/open-interest?instId=${inst}`),
     j(`${O}/api/v5/rubik/stat/taker-volume?ccy=${ccy}&instType=CONTRACTS&period=1H`).catch(() => null),
     j(`${O}/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=${ccy}&period=1H`).catch(() => null),
     // Deepest free REST book (~5000 levels/side) — widest reachable wall coverage.
     j(`${O}/api/v5/market/books-full?instId=${inst}&sz=5000`).catch(() => null),
+    // Contract spec — OKX book sizes are in CONTRACTS; ctVal converts to base coin.
+    j(`${O}/api/v5/public/instruments?instType=SWAP&instId=${inst}`).catch(() => null),
   ]);
   const oiBtc = +oi.data[0].oiCcy;
   // taker-volume rows: [ts, sellVol, buyVol] (newest first)
@@ -191,7 +207,10 @@ async function okx(sym) {
   // Order-book walls (preferred source — deeper than Bybit)
   let book = null;
   if (ob && ob.data && ob.data[0]) {
-    book = computeWalls(ob.data[0].bids, ob.data[0].asks);
+    const ctVal = instr && instr.data && instr.data[0] ? +instr.data[0].ctVal : 1;
+    const scale = isFinite(ctVal) && ctVal > 0 ? ctVal : 1; // contracts -> base coin
+    const conv = (lv) => lv.map((l) => [l[0], +l[1] * scale]);
+    book = computeWalls(conv(ob.data[0].bids), conv(ob.data[0].asks));
     if (book) book.source = 'OKX books-full';
   }
   return { oiBtc, taker: takerRatio, ls: lsRatio, book };
@@ -264,6 +283,7 @@ export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const debug = new URL(request.url).searchParams.has('debug');
+    const showBins = new URL(request.url).searchParams.has('bins');
     const sym = resolveSymbol(request.url);
 
     // Fetch all three venues concurrently; Bybit is the required core.
@@ -301,6 +321,7 @@ export default {
 
     // Walls: prefer OKX books-full (deepest), fall back to Bybit's book.
     const book = (okv && okv.book) || core.book;
+    if (book && !showBins) { delete book.bid.dbg; delete book.ask.dbg; }
 
     const d = {
       mark: core.mark, chg1h: core.chg1h, chg4h: core.chg4h, chg24h: core.chg24h,
