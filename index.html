@@ -70,6 +70,7 @@
   .wall-row .wprice{font-size:15px; font-weight:500}
   .wall-row .wdist{font-size:12px}
   .wall-row .wsize{font-size:11px; color:var(--muted); margin-left:auto}
+  .wall-sub{font-size:10px; color:var(--muted); margin:3px 0 0 72px; min-height:0}
   .imbal{height:6px; border-radius:3px; background:var(--down); margin:10px 0; overflow:hidden; position:relative}
   .imbal-fill{height:100%; background:var(--up); width:50%; transition:width .3s}
   .imbal-cap{font-size:11px; color:var(--muted); display:flex; justify-content:space-between}
@@ -116,11 +117,13 @@
 </div>
 
 <div class="book">
-  <div class="label">Order-book walls (nearest resting liquidity)</div>
+  <div class="label">Order-book walls · immediate book <span id="book-cov"></span></div>
   <div class="wall-row"><span class="side">Ask wall</span><span class="wprice" id="askw">—</span><span class="wdist neg" id="askd"></span><span class="wsize" id="asksz"></span></div>
+  <div class="wall-sub" id="askheavy"></div>
   <div class="imbal"><div class="imbal-fill" id="imbalfill"></div></div>
   <div class="imbal-cap"><span id="imbal-bid">bid —</span><span id="imbal-ask">— ask</span></div>
   <div class="wall-row"><span class="side">Bid wall</span><span class="wprice" id="bidw">—</span><span class="wdist pos" id="bidd"></span><span class="wsize" id="bidsz"></span></div>
+  <div class="wall-sub" id="bidheavy"></div>
 </div>
 
 <footer>
@@ -173,23 +176,34 @@ function render(d){
   $('topls').textContent = pos.topLS==null?'n/a':pos.topLS.toFixed(3);
   if(pos.source) $('topls-sub').textContent = pos.source;
 
-  // Order-book walls
+  // Order-book walls (band + significance model; nearest = the gap)
   const bk = d.book;
-  if(bk && bk.askWall){
-    $('askw').textContent = bk.askWall.price.toLocaleString('en-US',{maximumFractionDigits:0});
-    $('askd').textContent = fmtPct(bk.askWall.distPct);
-    $('asksz').textContent = bk.askWall.size.toFixed(1)+' BTC';
-  }
-  if(bk && bk.bidWall){
-    $('bidw').textContent = bk.bidWall.price.toLocaleString('en-US',{maximumFractionDigits:0});
-    $('bidd').textContent = fmtPct(bk.bidWall.distPct);
-    $('bidsz').textContent = bk.bidWall.size.toFixed(1)+' BTC';
-  }
   if(bk){
+    const money = v => v.toLocaleString('en-US',{maximumFractionDigits:0});
+    const paintSide = (side, wEl, dEl, szEl, heavyEl) => {
+      const nw = side.nearestWall;
+      if(nw){
+        $(wEl).textContent = money(nw.price);
+        $(dEl).textContent = fmtPct(nw.distPct);
+        $(szEl).textContent = nw.size.toFixed(1)+' BTC';
+      }else{
+        $(wEl).textContent = 'smooth';
+        $(dEl).textContent = '';
+        $(szEl).textContent = 'no distinct wall';
+      }
+      const mw = side.maxWall; // show heaviest only when it's not the nearest
+      $(heavyEl).textContent = (mw && nw && mw.price !== nw.price)
+        ? 'heaviest '+fmtPct(mw.distPct)+' · '+mw.size.toFixed(1)+' BTC' : '';
+    };
+    paintSide(bk.ask, 'askw','askd','asksz','askheavy');
+    paintSide(bk.bid, 'bidw','bidd','bidsz','bidheavy');
     const bidShare = Math.round(bk.imbalancePct);
     $('imbalfill').style.width = bidShare+'%';
     $('imbal-bid').textContent = 'bid '+bidShare+'%';
     $('imbal-ask').textContent = (100-bidShare)+'% ask';
+    const cov = Math.max(bk.ask.coveredPct||0, bk.bid.coveredPct||0);
+    const venue = bk.source ? bk.source.split(' ')[0] : '';
+    $('book-cov').textContent = '(±'+cov.toFixed(2)+'% · '+venue+')';
   }
 
   // Verdict (computed server-side, single source of truth)

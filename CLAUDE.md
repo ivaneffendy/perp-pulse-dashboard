@@ -63,12 +63,16 @@ duplicate the read logic into the page or a second worker. Keep it shared.
 | Open interest + 1h/4h Δ | Binance `openInterestHist` | delta is Binance-only (deepest venue, good directional proxy) |
 | **Aggregated OI (BTC)** | Binance + Bybit + OKX summed | USDT-margined perps only; a dead venue just drops out |
 | Taker buy/sell, top-trader L/S | Binance `futures/data/*` | Binance-only; `null` on Bybit fallback → shown as `n/a` |
-| **Order-book walls** | `/depth` snapshot, bucketed ~0.05% | heaviest resting bin each side + visible-book imbalance |
+| **Order-book walls** | OKX `books-full` (~5000 lvl), Bybit fallback | band+significance: nearest *significant* cluster (the gap) + heaviest (magnet) per side, `coveredPct`, imbalance |
 
 ### Known limits / quirks (deliberate, don't "fix" without reason)
-- **Order book is shallow.** The REST depth snapshot only covers ~0.1% around
-  price, so "nearest wall" = heaviest bin in the *immediate* book. Deeper walls
-  (±2%) would need a WS-maintained book = a persistent recorder (out of scope).
+- **Order book is shallow.** Even OKX `books-full` (~5000 levels) only spans
+  roughly ±0.5–1% around price. So walls = *immediate-book* liquidity, and a
+  side with no outlier bin is reported as "smooth" rather than inventing a
+  near-mid wall. `book.*.coveredPct` reports how far the snapshot actually
+  reached. Deeper walls (±2%+) need a WS-maintained book = persistent recorder
+  (out of scope). `computeWalls` drops the innermost bin (that's the spread) and
+  only calls a bin a wall if it's ≥3× the median depth AND ≥15% of side volume.
 - **Walls are spoofable.** Treat as "liquidity sitting here right now," one
   confluence input — not a trigger.
 - **Liquidations / liquidation heatmaps are intentionally absent.** Binance's
