@@ -1,0 +1,27 @@
+index.html
+  80ab2480de216d57 36-45,102,106,126,155-161,166-195,205,218,234,236,244,285,287-288,292,299-300,302,316,318-319,322,337-339
+worker/src/index.js
+  80ab2480de216d57 24-45,133,135,171,173,175-177,179,203,205,267,270-274,312
+CLAUDE.md
+  80ab2480de216d57 40-41,58-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "6f98eb1bed0eaac79b2886b13f4e348842d9f440",
+  "prompts": {
+    "80ab2480de216d57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad9dee3a-3bd8-4e47-b942-64d7e1695ace",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 121,
+      "total_deletions": 25,
+      "accepted_lines": 120,
+      "overriden_lines": 0
+    }
+  }
+}
