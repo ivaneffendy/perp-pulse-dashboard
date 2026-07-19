@@ -21,6 +21,28 @@ const CORS = {
 
 const EDGE_TTL = 5; // seconds — brief edge cache so rapid refreshes stay polite
 
+// Supported pairs (allowlist). IDs derive deterministically from the base coin;
+// keeping an explicit map both documents the set and prevents arbitrary ?symbol=
+// strings from being interpolated into upstream URLs (SSRF-style shaping).
+const PAIRS = {
+  BTC:  { bybit: 'BTCUSDT',  okxInst: 'BTC-USDT-SWAP',  okxCcy: 'BTC',  binance: 'BTCUSDT'  },
+  ETH:  { bybit: 'ETHUSDT',  okxInst: 'ETH-USDT-SWAP',  okxCcy: 'ETH',  binance: 'ETHUSDT'  },
+  SOL:  { bybit: 'SOLUSDT',  okxInst: 'SOL-USDT-SWAP',  okxCcy: 'SOL',  binance: 'SOLUSDT'  },
+  XRP:  { bybit: 'XRPUSDT',  okxInst: 'XRP-USDT-SWAP',  okxCcy: 'XRP',  binance: 'XRPUSDT'  },
+  BNB:  { bybit: 'BNBUSDT',  okxInst: 'BNB-USDT-SWAP',  okxCcy: 'BNB',  binance: 'BNBUSDT'  },
+  DOGE: { bybit: 'DOGEUSDT', okxInst: 'DOGE-USDT-SWAP', okxCcy: 'DOGE', binance: 'DOGEUSDT' },
+  ADA:  { bybit: 'ADAUSDT',  okxInst: 'ADA-USDT-SWAP',  okxCcy: 'ADA',  binance: 'ADAUSDT'  },
+  LINK: { bybit: 'LINKUSDT', okxInst: 'LINK-USDT-SWAP', okxCcy: 'LINK', binance: 'LINKUSDT' },
+  SUI:  { bybit: 'SUIUSDT',  okxInst: 'SUI-USDT-SWAP',  okxCcy: 'SUI',  binance: 'SUIUSDT'  },
+  HYPE: { bybit: 'HYPEUSDT', okxInst: 'HYPE-USDT-SWAP', okxCcy: 'HYPE', binance: 'HYPEUSDT' },
+};
+
+function resolveSymbol(url) {
+  const raw = (new URL(url).searchParams.get('symbol') || 'BTC').toUpperCase();
+  const p = PAIRS[raw] || PAIRS.BTC;
+  return { base: PAIRS[raw] ? raw : 'BTC', ...p };
+}
+
 async function j(url) {
   const r = await fetch(url, { cf: { cacheTtl: EDGE_TTL, cacheEverything: true } });
   if (!r.ok) throw new Error(`${url.replace(/\?.*/, '')} -> ${r.status}`);
@@ -108,9 +130,9 @@ function computeWalls(bids, asks) {
 
 /* ------------------------------ Bybit (core) ------------------------------ */
 // Primary source: price, funding, OI + deltas, order-book walls. Reachable.
-async function bybit() {
+async function bybit(sym) {
   const B = 'https://api.bybit.com';
-  const S = 'BTCUSDT';
+  const S = sym.bybit;
   const [tick, kl, oiH, ob, acct] = await Promise.all([
     j(`${B}/v5/market/tickers?category=linear&symbol=${S}`),
     j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=60&limit=5`),
@@ -146,14 +168,15 @@ async function bybit() {
 /* ------------------------------ OKX (extras) ------------------------------ */
 // OI (BTC) + taker buy/sell + long/short account ratio. Reachable; replaces the
 // Binance-only positioning signals.
-async function okx() {
+async function okx(sym) {
   const O = 'https://www.okx.com';
+  const inst = sym.okxInst, ccy = sym.okxCcy;
   const [oi, taker, ls, ob] = await Promise.all([
-    j(`${O}/api/v5/public/open-interest?instId=BTC-USDT-SWAP`),
-    j(`${O}/api/v5/rubik/stat/taker-volume?ccy=BTC&instType=CONTRACTS&period=1H`).catch(() => null),
-    j(`${O}/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=BTC&period=1H`).catch(() => null),
+    j(`${O}/api/v5/public/open-interest?instId=${inst}`),
+    j(`${O}/api/v5/rubik/stat/taker-volume?ccy=${ccy}&instType=CONTRACTS&period=1H`).catch(() => null),
+    j(`${O}/api/v5/rubik/stat/contracts/long-short-account-ratio?ccy=${ccy}&period=1H`).catch(() => null),
     // Deepest free REST book (~5000 levels/side) — widest reachable wall coverage.
-    j(`${O}/api/v5/market/books-full?instId=BTC-USDT-SWAP&sz=5000`).catch(() => null),
+    j(`${O}/api/v5/market/books-full?instId=${inst}&sz=5000`).catch(() => null),
   ]);
   const oiBtc = +oi.data[0].oiCcy;
   // taker-volume rows: [ts, sellVol, buyVol] (newest first)
@@ -177,9 +200,9 @@ async function okx() {
 /* ----------------------- Binance (opportunistic only) --------------------- */
 // If reachable (it usually isn't, from ID/Jakarta), gives the richest data:
 // its own OI, taker buy/sell, and TOP-trader L/S. Never depended upon.
-async function binance() {
+async function binance(sym) {
   const B = 'https://fapi.binance.com';
-  const S = 'BTCUSDT';
+  const S = sym.binance;
   const [oiHist, taker, topls] = await Promise.all([
     j(`${B}/futures/data/openInterestHist?symbol=${S}&period=1h&limit=1`),
     j(`${B}/futures/data/takerlongshortRatio?symbol=${S}&period=1h&limit=1`),
@@ -241,9 +264,14 @@ export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const debug = new URL(request.url).searchParams.has('debug');
+    const sym = resolveSymbol(request.url);
 
     // Fetch all three venues concurrently; Bybit is the required core.
-    const [by, ok, bn] = await Promise.all([attempt(bybit), attempt(okx), attempt(binance)]);
+    const [by, ok, bn] = await Promise.all([
+      attempt(() => bybit(sym)),
+      attempt(() => okx(sym)),
+      attempt(() => binance(sym)),
+    ]);
 
     if (!by.ok) {
       return new Response(
@@ -281,6 +309,7 @@ export default {
 
     const payload = {
       ts: Date.now(),
+      symbol: sym.base,
       source: core.source + (bnv ? ' + Binance' : '') + (okv ? ' + OKX' : ''),
       price: { mark: core.mark, chg1h: core.chg1h, chg4h: core.chg4h, chg24h: core.chg24h },
       funding: { rate: core.funding, nextFundingTime: core.nextFundingTime },

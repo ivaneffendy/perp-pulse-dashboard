@@ -37,7 +37,8 @@ gracefully to the OKX/Bybit baseline.
 - **`index.html`** — single-file dashboard. Pure renderer: it fetches the
   Worker and paints the payload. It contains **no** market logic. Deployed via
   GitHub Pages. Configure the Worker URL via `?api=<url>` (persisted to
-  `localStorage` as `ppd_api`) or by hardcoding `WORKER_URL`.
+  `localStorage` as `ppd_api`) or by hardcoding `WORKER_URL`. Pair is chosen via
+  the chip row / `?symbol=<BASE>` (persisted as `ppd_symbol`).
 - **`worker/`** — Cloudflare Worker (`wrangler.toml` + `src/index.js`). Stateless
   read-through proxy. This is where **all** data-fetching and the `verdict()`
   logic live. Deploy with `npx wrangler deploy` from `worker/`.
@@ -53,6 +54,15 @@ returns permissive CORS. The page only ever talks to the Worker.
 `verdict()` lives **only** in the Worker. When the planned TradingView →
 Telegram push worker is built, it must reuse that same `verdict()` — do not
 duplicate the read logic into the page or a second worker. Keep it shared.
+
+## Pairs
+Top-10 USDT perps, allowlisted in the Worker's `PAIRS` map (base → Bybit symbol
+/ OKX instId / rubik ccy / Binance symbol): BTC, ETH, SOL, XRP, BNB, DOGE, ADA,
+LINK, SUI, HYPE. `?symbol=<BASE>` is validated against this allowlist (defaults
+to BTC) so nothing arbitrary hits upstream URLs. **HYPE is at-risk**: its OKX
+data is unverified — if OKX returns empty it degrades to Bybit-only (taker/L-S →
+`n/a`), same as the Binance path. OI + wall sizes are in the *base coin*, so the
+page formats units per-symbol (thousands of BTC vs billions of DOGE).
 
 ## Data scope (v1) — all free, all snapshot
 

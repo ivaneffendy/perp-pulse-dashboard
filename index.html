@@ -33,6 +33,16 @@
   #refresh:focus-visible{outline:2px solid var(--steel); outline-offset:2px}
   #refresh[disabled]{opacity:.5}
 
+  .pairs{display:flex; gap:6px; overflow-x:auto; margin-bottom:12px; padding-bottom:2px; -webkit-overflow-scrolling:touch}
+  .pairs::-webkit-scrollbar{display:none}
+  .chip{
+    background:var(--card); border:1px solid var(--border); color:var(--muted);
+    font:inherit; font-size:12px; padding:6px 12px; border-radius:999px; cursor:pointer;
+    white-space:nowrap; flex:none; transition:border-color .12s, color .12s;
+  }
+  .chip.active{color:var(--text); border-color:var(--steel)}
+  .chip:active{transform:scale(.96)}
+
   .verdict{
     border:1px solid var(--border); border-left:4px solid var(--muted);
     background:var(--card); border-radius:10px; padding:14px 14px 12px; margin-bottom:12px;
@@ -89,9 +99,11 @@
 </head>
 <body>
 <header>
-  <h1>BTC<span>·</span>PULSE</h1>
+  <h1><span id="sym">BTC</span><span>·</span>PULSE</h1>
   <button id="refresh" onclick="load()">Refresh</button>
 </header>
+
+<div class="pairs" id="pairs"></div>
 
 <div id="err"></div>
 
@@ -111,7 +123,7 @@
   <div class="stat"><div class="label">Funding rate</div><div class="val" id="funding">—</div><div class="sub" id="funding-sub"></div></div>
   <div class="stat"><div class="label">Next funding</div><div class="val" id="nextf">—</div><div class="sub">countdown</div></div>
   <div class="stat"><div class="label">Open interest (agg)</div><div class="val" id="oi">—</div><div class="sub" id="oi-usd"></div></div>
-  <div class="stat"><div class="label">OI Δ 1h / 4h</div><div class="val" id="oid">—</div><div class="sub">Binance positioning</div></div>
+  <div class="stat"><div class="label">OI Δ 1h / 4h</div><div class="val" id="oid">—</div><div class="sub">Bybit positioning</div></div>
   <div class="stat"><div class="label">Taker buy/sell</div><div class="val" id="taker">—</div><div class="sub">1h aggressor flow</div></div>
   <div class="stat"><div class="label">Long / short</div><div class="val" id="topls">—</div><div class="sub" id="topls-sub">positions, 1h</div></div>
 </div>
@@ -140,10 +152,47 @@ const WORKER_URL = params.get('api')
   || localStorage.getItem('ppd_api')
   || 'https://perp-pulse-data.perp-pulse-data.workers.dev';
 
+// Selectable pairs (must match the Worker's allowlist). HYPE degrades to
+// Bybit-only if OKX has no stats for it — handled server-side.
+const PAIRS = ['BTC','ETH','SOL','XRP','BNB','DOGE','ADA','LINK','SUI','HYPE'];
+if (params.get('symbol')) localStorage.setItem('ppd_symbol', params.get('symbol').toUpperCase());
+let SYMBOL = (params.get('symbol') || localStorage.getItem('ppd_symbol') || 'BTC').toUpperCase();
+if (!PAIRS.includes(SYMBOL)) SYMBOL = 'BTC';
+
 const $ = id => document.getElementById(id);
 const fmtPct = (v, dp=2) => (v>=0?'+':'') + v.toFixed(dp) + '%';
 const cls = v => v>=0 ? 'pos' : 'neg';
 const fmtUsd = v => v>=1e9 ? '$'+(v/1e9).toFixed(2)+'B' : '$'+(v/1e6).toFixed(0)+'M';
+// Coin-amount formatter (OI / wall sizes are denominated in the base coin, which
+// varies by pair — e.g. thousands of BTC vs billions of DOGE).
+const fmtCoin = v => v>=1e9 ? (v/1e9).toFixed(2)+'B'
+  : v>=1e6 ? (v/1e6).toFixed(2)+'M'
+  : v>=1e3 ? (v/1e3).toFixed(1)+'k'
+  : v.toFixed(1);
+// Price formatter: decimals scale with magnitude (BTC ~63k vs DOGE ~0.38).
+const fmtPrice = v => v>=1000 ? v.toLocaleString('en-US',{maximumFractionDigits:0})
+  : v>=1 ? v.toLocaleString('en-US',{maximumFractionDigits:2})
+  : v.toLocaleString('en-US',{maximumFractionDigits:5});
+
+function buildChips(){
+  const box = $('pairs');
+  box.innerHTML = '';
+  for(const p of PAIRS){
+    const b = document.createElement('button');
+    b.className = 'chip' + (p===SYMBOL?' active':'');
+    b.textContent = p;
+    b.onclick = () => selectPair(p);
+    box.appendChild(b);
+  }
+}
+function selectPair(p){
+  if(p===SYMBOL) return;
+  SYMBOL = p;
+  localStorage.setItem('ppd_symbol', p);
+  $('sym').textContent = p;
+  buildChips();
+  load();
+}
 
 function countdown(ts){
   const s = Math.max(0, ts - Date.now());
@@ -153,7 +202,7 @@ function countdown(ts){
 
 function render(d){
   const p = d.price;
-  $('px').textContent = p.mark.toLocaleString('en-US',{maximumFractionDigits:1});
+  $('px').textContent = fmtPrice(p.mark);
   for(const [id,v] of [['chg1h',p.chg1h],['chg4h',p.chg4h],['chg24h',p.chg24h]]){
     $(id).textContent = id.replace('chg','')+' '+fmtPct(v);
     $(id).className = 'chg '+cls(v);
@@ -166,7 +215,7 @@ function render(d){
   $('nextf').textContent = countdown(f.nextFundingTime);
 
   const oi = d.oi;
-  $('oi').textContent = (oi.aggBtc/1000).toFixed(1)+'k BTC';
+  $('oi').textContent = fmtCoin(oi.aggBtc)+' '+SYMBOL;
   const nVenues = Object.values(oi.venues).filter(v=>v!=null).length;
   $('oi-usd').textContent = fmtUsd(oi.aggUsd)+' · '+nVenues+' venues';
   $('oid').innerHTML = `<span class="${cls(oi.d1h)}">${fmtPct(oi.d1h)}</span> / <span class="${cls(oi.d4h)}">${fmtPct(oi.d4h)}</span>`;
@@ -179,13 +228,12 @@ function render(d){
   // Order-book walls (band + significance model; nearest = the gap)
   const bk = d.book;
   if(bk){
-    const money = v => v.toLocaleString('en-US',{maximumFractionDigits:0});
     const paintSide = (side, wEl, dEl, szEl, heavyEl) => {
       const nw = side.nearestWall;
       if(nw){
-        $(wEl).textContent = money(nw.price);
+        $(wEl).textContent = fmtPrice(nw.price);
         $(dEl).textContent = fmtPct(nw.distPct);
-        $(szEl).textContent = nw.size.toFixed(1)+' BTC';
+        $(szEl).textContent = fmtCoin(nw.size)+' '+SYMBOL;
       }else{
         $(wEl).textContent = 'smooth';
         $(dEl).textContent = '';
@@ -193,7 +241,7 @@ function render(d){
       }
       const mw = side.maxWall; // show heaviest only when it's not the nearest
       $(heavyEl).textContent = (mw && nw && mw.price !== nw.price)
-        ? 'heaviest '+fmtPct(mw.distPct)+' · '+mw.size.toFixed(1)+' BTC' : '';
+        ? 'heaviest '+fmtPct(mw.distPct)+' · '+fmtCoin(mw.size)+' '+SYMBOL : '';
     };
     paintSide(bk.ask, 'askw','askd','asksz','askheavy');
     paintSide(bk.bid, 'bidw','bidd','bidsz','bidheavy');
@@ -234,21 +282,24 @@ async function jTimeout(url, ms=2500){
 async function enrichBinance(d){
   let ok = false;
   // Add Binance to aggregated OI (fapi/v1 endpoint — usually CORS-friendly)
+  const at = SYMBOL, S = SYMBOL + 'USDT';
   try{
-    const oi = await jTimeout(BINANCE+'/fapi/v1/openInterest?symbol=BTCUSDT');
+    const oi = await jTimeout(BINANCE+'/fapi/v1/openInterest?symbol='+S);
+    if(SYMBOL !== at) return;                 // pair switched while fetching
     const venues = {...d.oi.venues, binance:+oi.openInterest};
     const parts = Object.values(venues).filter(v=>v!=null);
     const aggBtc = parts.reduce((s,v)=>s+v,0);
-    $('oi').textContent = (aggBtc/1000).toFixed(1)+'k BTC';
+    $('oi').textContent = fmtCoin(aggBtc)+' '+SYMBOL;
     $('oi-usd').textContent = fmtUsd(aggBtc*d.price.mark)+' · '+parts.length+' venues';
     ok = true;
   }catch(e){}
   // Binance taker buy/sell + TOP-trader L/S (futures/data endpoints)
   try{
     const [taker, topls] = await Promise.all([
-      jTimeout(BINANCE+'/futures/data/takerlongshortRatio?symbol=BTCUSDT&period=1h&limit=1'),
-      jTimeout(BINANCE+'/futures/data/topLongShortPositionRatio?symbol=BTCUSDT&period=1h&limit=1'),
+      jTimeout(BINANCE+'/futures/data/takerlongshortRatio?symbol='+S+'&period=1h&limit=1'),
+      jTimeout(BINANCE+'/futures/data/topLongShortPositionRatio?symbol='+S+'&period=1h&limit=1'),
     ]);
+    if(SYMBOL !== at) return;                 // pair switched while fetching
     $('taker').textContent = (+taker[0].buySellRatio).toFixed(3);
     $('topls').textContent = (+topls[0].longShortRatio).toFixed(3);
     $('topls-sub').textContent = 'Binance top-trader';
@@ -262,10 +313,13 @@ async function load(){
   btn.disabled = true; btn.textContent = '…';
   $('err').style.display='none';
   document.body.classList.add('updating');
+  const at = SYMBOL;
   try{
-    const r = await fetch(WORKER_URL);
+    const u = new URL(WORKER_URL); u.searchParams.set('symbol', SYMBOL);
+    const r = await fetch(u);
     const d = await r.json();
     if(!r.ok || d.error) throw new Error(d.detail || d.error || ('HTTP '+r.status));
+    if(SYMBOL !== at) return;                 // user switched pair mid-request
     render(d);
     enrichBinance(d); // non-blocking: enrich with direct Binance if reachable
   }catch(e){
@@ -280,6 +334,9 @@ async function load(){
     document.body.classList.remove('updating');
   }
 }
+
+$('sym').textContent = SYMBOL;
+buildChips();
 load();
 </script>
 </body>
