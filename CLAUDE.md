@@ -113,10 +113,23 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 
 ## Known limits and quirks (deliberate — don't "fix" without reason)
 
-- **The ETF layer is effectively manual.** Farside returns **HTTP 403 behind a
-  Cloudflare bot challenge**, so the scrape yields nothing and layer 1 sits at 0.
-  The header's `in/out/flat` toggle is the PRIMARY way this layer gets a value.
-  The choice is sent back as `?etf=` so scoring stays server-side.
+- **Every upstream needs a descriptive `User-Agent`.** Workers send none by
+  default. CoinGecko answers `403 "Please add a descriptive User-Agent"`, and
+  Farside 403s too. `UPSTREAM_HEADERS` in `worker/src/index.js` fixes both;
+  `worker/test/upstream-headers.test.js` guards it.
+- **Dominance comes from CoinPaprika, not CoinGecko.** CoinGecko's free tier
+  limits by IP and Cloudflare's egress IPs are shared across every Workers
+  customer, so `/api/v3/global` returns **429 permanently** from the Worker.
+  CoinPaprika needs no key. TOTAL3 is computed from raw market caps
+  (`total − BTC − ETH`), not from rounded dominance percentages.
+- **The ETF layer works, but only from the Worker.** Farside sits behind
+  Cloudflare and 403s most clients — including a local `curl` — yet Worker
+  egress passes. So layer 1 is live in production and cannot be verified from a
+  dev machine. The header's `in/out/flat` toggle is a **fallback** for when the
+  scrape breaks, sent back as `?etf=` so scoring stays server-side.
+- **Upstream failures must never be swallowed silently.** A caught-to-null error
+  hid both bugs above behind an empty weather widget for a full deploy.
+  `fetchMacro` uses `allSettled` and surfaces reasons on `/macro?debug=1`.
 - **The OI layer only scores 2 of 4 quadrants**, exactly as §VII specifies.
   Price-down + OI-up (*fresh shorts*) and price-up + OI-down (*short covering*)
   render as badges but score `0` rather than inventing signs the playbook never

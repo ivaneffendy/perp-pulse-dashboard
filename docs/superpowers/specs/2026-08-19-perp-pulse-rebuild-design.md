@@ -403,12 +403,19 @@ from `worker/`.
 
 ## 14. Known risks
 
-1. **CONFIRMED DEAD (2026-08-19): the ETF feed cannot be scraped.** Farside
-   returns **HTTP 403 behind a Cloudflare bot challenge** ("Just a moment..."),
-   so layer 1 sits at `0` unless set by hand. The manual `in/out/flat` toggle is
-   therefore the **primary** path, not a fallback — and in practice the score
-   operates on 4 of 5 layers, so `>= +3 CLEAR TO LONG` needs 3 of the remaining
-   4 to fire. The parser is kept and unit-tested in case a readable feed appears.
+1. ~~ETF feed confirmed dead~~ — **CORRECTED 2026-08-19 (post-deploy).** The
+   403 was a missing `User-Agent`, not a permanent bot wall. With
+   `UPSTREAM_HEADERS` set, Farside returns data from the Worker (verified live:
+   `+$189.3M`) and layer 1 scores normally. Note Farside still 403s from a local
+   `curl` — it is itself behind Cloudflare, and Worker egress is what passes —
+   so this layer can only be verified in production. The manual toggle remains
+   as a fallback.
+1b. **Dominance source changed from CoinGecko to CoinPaprika.** CoinGecko's free
+   tier rate-limits by IP; Cloudflare's egress IPs are shared across all Workers
+   customers, so `/api/v3/global` returns **429 permanently**. CoinPaprika needs
+   no API key. Both failures were invisible because errors were caught into
+   nulls — `fetchMacro` now uses `allSettled` and reports reasons on
+   `/macro?debug=1`.
 2. **Watchlist vs. journal divergence.** NEAR, AVAX and ARB are in playbook §II
    but appear in zero of 28 logged trades; HYPE, WLD, RENDER, ZEC and ONDO are
    traded but not in §II. D3 resolves this operationally via an editable

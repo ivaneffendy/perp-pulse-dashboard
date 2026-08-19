@@ -15,19 +15,30 @@
  * Everything here returns null rather than throwing; score.js treats null as 0.
  */
 
-const CG = 'https://api.coingecko.com/api/v3/global';
+// CoinGecko's free tier rate-limits by IP, and Cloudflare's egress IPs are
+// shared across every Workers customer, so /api/v3/global answers 429
+// permanently from here. CoinPaprika needs no key and is not IP-starved.
+const CP_GLOBAL = 'https://api.coinpaprika.com/v1/global';
+const CP_TICKERS = 'https://api.coinpaprika.com/v1/tickers?limit=6';
 const FARSIDE = 'https://farside.co.uk/bitcoin-etf-flow-all-data/';
 
-export function parseDominance(payload) {
-  const d = payload?.data;
-  const total = d?.total_market_cap?.usd;
-  const pct = d?.market_cap_percentage;
-  if (!Number.isFinite(total) || !pct) return null;
-  const btcD = +pct.btc, ethD = +pct.eth, usdtD = +pct.usdt;
-  if (!Number.isFinite(btcD) || !Number.isFinite(ethD)) return null;
+/**
+ * TOTAL3 is total market cap excluding BTC and ETH. Computed from raw market
+ * caps rather than rounded dominance percentages, which lose precision at the
+ * trillion scale.
+ */
+export function parseDominance(global, tickers) {
+  const total = global?.market_cap_usd;
+  if (!Number.isFinite(total) || total <= 0 || !Array.isArray(tickers)) return null;
+  const mcap = (sym) => tickers.find((t) => t?.symbol === sym)?.quotes?.USD?.market_cap;
+  const btc = mcap('BTC'), eth = mcap('ETH'), usdt = mcap('USDT');
+  if (!Number.isFinite(btc) || !Number.isFinite(eth)) return null;
   return {
-    btcD, usdtD, totalMcap: total,
-    total3: total * (100 - btcD - ethD) / 100,
+    btcD: (btc / total) * 100,
+    ethD: (eth / total) * 100,
+    usdtD: Number.isFinite(usdt) ? (usdt / total) * 100 : null,
+    totalMcap: total,
+    total3: total - btc - eth,
   };
 }
 
@@ -53,11 +64,20 @@ export function parseFarsideTotal(html) {
 }
 
 export async function fetchMacro(j) {
-  const [dom, etf] = await Promise.all([
-    j(CG).then(parseDominance).catch(() => null),
-    j(FARSIDE, { text: true }).then(parseFarsideTotal).catch(() => null),
+  // allSettled, not catch(()=>null): swallowing the reason is exactly how a
+  // CoinGecko 403 hid behind an empty weather widget for a whole deploy.
+  // Reasons are surfaced on /macro?debug=1.
+  const settled = await Promise.allSettled([
+    Promise.all([j(CP_GLOBAL), j(CP_TICKERS)]).then(([g, t]) => parseDominance(g, t)),
+    j(FARSIDE, { text: true }).then(parseFarsideTotal),
   ]);
+  const val = (r) => (r.status === 'fulfilled' ? r.value : null);
+  const why = (r, v) => r.status === 'rejected'
+    ? String(r.reason?.message ?? r.reason)
+    : (v == null ? 'fetched ok but parsed to null' : null);
+  const dom = val(settled[0]), etf = val(settled[1]);
   return {
+    errors: { dominance: why(settled[0], dom), etf: why(settled[1], etf) },
     btcD: dom?.btcD ?? null,
     usdtD: dom?.usdtD ?? null,
     total3: dom?.total3 ?? null,

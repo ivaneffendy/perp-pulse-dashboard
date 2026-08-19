@@ -169,16 +169,21 @@ async function handleAsset(url) {
   return json(payload);
 }
 
-async function handleMacro() {
+async function handleMacro(url) {
   const r = await attempt(() => fetchMacro(fetcher(900)));
-  return json(r.ok ? { ts: Date.now(), ...r.val } : { ts: Date.now(), error: r.err });
+  if (!r.ok) return json({ ts: Date.now(), error: r.err });
+  const { errors, ...rest } = r.val;
+  // Upstream reasons only on ?debug=1 — the page never needs them.
+  return json(url.searchParams.has('debug')
+    ? { ts: Date.now(), ...rest, errors }
+    : { ts: Date.now(), ...rest });
 }
 
 export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(request.url);
-    if (url.pathname === '/macro') return handleMacro();
+    if (url.pathname === '/macro') return handleMacro(url);
     return handleAsset(url);
   },
 };
