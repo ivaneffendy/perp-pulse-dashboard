@@ -1,0 +1,24 @@
+docs/reading-the-dashboard.html
+  edf3a178a6d8702b 1-10,12-16,18-21,23-32,34-131,133-135,137-203,205,207-221,223-231,233-234,236-250,252-253,255-256,258-265,269-271,273-285,292-299,301-302,304-305,307-315,318-321,323-327,329-330,332-340,342-357,360,362-375,377,379,381-382,384-391,393-402
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "336a4dcf68f7a025f3244f59e928d80fb2004724",
+  "prompts": {
+    "edf3a178a6d8702b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6968183e-f77b-4dd9-b4bd-a95ae8aca38c",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 403,
+      "total_deletions": 0,
+      "accepted_lines": 361,
+      "overriden_lines": 38,
+      "messages_url": "https://usegitai.com/cas/2e3dc929cc35578c39d28c1d233f5fedcb4d1ca68729df2764f7e5367fcc5f2e"
+    }
+  }
+}
