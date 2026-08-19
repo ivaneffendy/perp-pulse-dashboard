@@ -1,7 +1,7 @@
 import { fetchMatrix, fetchAsset, fetchMacro } from './api.js';
 import { renderRow, sortRows } from './matrix.js';
 import { renderDetail } from './detail.js';
-import { renderWeather, initEtfToggle } from './weather.js';
+import { renderWeather, initEtfToggle, fetchDominance } from './weather.js';
 import { enrichBinance } from './binance-enrich.js';
 
 // Playbook §II's fixed eight. Override with ?watchlist=BTC,HYPE,... (persisted).
@@ -90,8 +90,12 @@ async function load() {
   let anyOk = false;
 
   // Macro first, so its ETF number can be relayed to every asset request.
-  const macro = await fetchMacro().catch(() => null);
-  renderWeather(macro);
+  // Dominance rides alongside but comes from THIS DEVICE — see weather.js.
+  const [macro, dom] = await Promise.all([
+    fetchMacro().catch(() => null),
+    fetchDominance().catch(() => null),
+  ]);
+  renderWeather(macro, dom);
   etf.refresh(macro);
   const manual = etf.get();
   etfValue = manual != null ? manual : (macro?.etfBtc ?? null);

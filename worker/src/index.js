@@ -75,10 +75,14 @@ const fetcher = (ttl) => async (url, { text = false, retry = true, bucket = true
     cf: { cacheTtl: ttl, cacheEverything: true },
   };
   let r = await fetch(target, opts);
-  // Bybit's CloudFront geo-blocks some Cloudflare edge egress intermittently.
-  // Two extra attempts convert most of those into a served row.
-  for (let i = 0; i < 2 && !r.ok && retry; i++) {
+  // Bybit's CloudFront geo-blocks some Cloudflare edge egress intermittently,
+  // and the page fires eight asset requests at once, which makes a hit far more
+  // likely. Retry WITH BACKOFF — retrying instantly just re-races the same
+  // congested moment, which is why zero-delay retries barely helped.
+  const backoff = [120, 350, 800];
+  for (let i = 0; i < backoff.length && !r.ok && retry; i++) {
     if (r.status !== 403 && r.status !== 429 && r.status < 500) break;
+    await new Promise((res) => setTimeout(res, backoff[i]));
     r = await fetch(target, opts);
   }
   if (!r.ok) {

@@ -117,11 +117,20 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   default. CoinGecko answers `403 "Please add a descriptive User-Agent"`, and
   Farside 403s too. `UPSTREAM_HEADERS` in `worker/src/index.js` fixes both;
   `worker/test/upstream-headers.test.js` guards it.
-- **Dominance comes from CoinPaprika, not CoinGecko.** CoinGecko's free tier
-  limits by IP and Cloudflare's egress IPs are shared across every Workers
-  customer, so `/api/v3/global` returns **429 permanently** from the Worker.
-  CoinPaprika needs no key. TOTAL3 is computed from raw market caps
-  (`total − BTC − ETH`), not from rounded dominance percentages.
+- **Dominance is fetched CLIENT-SIDE, from the device — not the Worker.**
+  *Every* free market-cap API rate-limits by IP, and Cloudflare's Worker egress
+  IPs are shared across all Workers customers, so the quota is exhausted by
+  strangers before we call: CoinGecko returns **429**, CoinPaprika **402**. Both
+  answer 200 from an ordinary connection. Swapping vendors does not fix this —
+  it was tried. `src/weather.js` fetches from the browser (CoinGecko, then
+  CoinPaprika), which uses the *user's* IP, exactly like `binance-enrich.js`.
+  This is only legitimate because **dominance is display-only**; anything that
+  feeds the score must stay server-side. The Worker still attempts it as a
+  last-resort fallback.
+- **Upstream retries need backoff.** Eight asset requests fire at once, so a
+  transient Bybit geo-403 hits several; retrying with zero delay just re-races
+  the same congested moment. `fetcher()` backs off 120/350/800ms, which took a
+  watchlist sweep from ~6/8 to 24/24 over three refreshes.
 - **The ETF layer works, but only from the Worker.** Farside sits behind
   Cloudflare and 403s most clients — including a local `curl` — yet Worker
   egress passes. So layer 1 is live in production and cannot be verified from a
