@@ -152,6 +152,12 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **Stale data greys the grid and shows a banner after 10 min.** Silently showing
   old prices as live is the worst failure this tool can have.
 
+## Docs
+`docs/reading-the-dashboard.html` is the **reader's guide** — a plain-language
+explanation of every number on screen, written for someone who had no part in
+building this. Keep it in sync when a badge, chip or score layer changes; it is
+the artifact shared with anyone who asks "what am I looking at?".
+
 ## Roadmap
 - Playbook §III 5-pillar gate (needs ≥4/5 to qualify). Pillars 1, 2 and 5 are
   already derivable from `mode`, `equilibrium` and `sweep`; 3 and 4 need manual

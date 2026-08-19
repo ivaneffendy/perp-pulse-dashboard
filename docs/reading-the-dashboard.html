@@ -1,0 +1,402 @@
+<title>Reading Perp Pulse</title>
+<style>
+  /* ---- tokens: light is the complete set ---- */
+  :root{
+    --paper:#F2F5F8; --surface:#FFFFFF; --sunk:#E7ECF2;
+    --ink:#10151C; --ink-2:#39434F; --ink-3:#6B7787;
+    --rule:#D3DBE4; --rule-soft:#E2E8EF;
+    --accent:#2D6BD4; --accent-soft:#E8EFFB;
+    --long:#17784A; --short:#B8332F; --chop:#9A6410;
+    --long-bg:#E6F3EC; --short-bg:#FBEAE9; --chop-bg:#FAF0DE;
+    --pin-ink:#FFFFFF;
+    --shadow:0 1px 2px rgba(16,21,28,.05), 0 8px 24px -12px rgba(16,21,28,.18);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --paper:#0C1016; --surface:#141A22; --sunk:#0F141B;
+      --ink:#DFE6EE; --ink-2:#A7B3C2; --ink-3:#7B8899;
+      --rule:#232C38; --rule-soft:#1A222C;
+      --accent:#7BA8F2; --accent-soft:#17233A;
+      --long:#4FC98A; --short:#F2726D; --chop:#E0A845;
+      --long-bg:#11241B; --short-bg:#2A1416; --chop-bg:#261D0C;
+      --pin-ink:#0C1016;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0C1016; --surface:#141A22; --sunk:#0F141B;
+    --ink:#DFE6EE; --ink-2:#A7B3C2; --ink-3:#7B8899;
+    --rule:#232C38; --rule-soft:#1A222C;
+    --accent:#7BA8F2; --accent-soft:#17233A;
+    --long:#4FC98A; --short:#F2726D; --chop:#E0A845;
+    --long-bg:#11241B; --short-bg:#2A1416; --chop-bg:#261D0C;
+    --pin-ink:#0C1016;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:ui-serif,"Iowan Old Style",Georgia,Cambria,"Times New Roman",serif;
+    font-size:17px; line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sans{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+  .mono,code,kbd{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+
+  .wrap{max-width:1080px; margin:0 auto; padding:56px 24px 96px}
+  .col{max-width:66ch}
+
+  /* ---- masthead ---- */
+  header.mast{border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:14px}
+  .kicker{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:11px; letter-spacing:.2em; text-transform:uppercase;
+    color:var(--accent); font-weight:650;
+  }
+  h1{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:clamp(34px,6vw,52px); line-height:1.02; letter-spacing:-.03em;
+    font-weight:750; margin:12px 0 10px; text-wrap:balance;
+  }
+  .standfirst{font-size:19px; color:var(--ink-2); max-width:60ch; margin:0}
+  .meta{
+    display:flex; flex-wrap:wrap; gap:8px 22px; margin-top:20px;
+    font-size:12px; color:var(--ink-3);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  .meta b{color:var(--ink-2); font-weight:600}
+
+  /* ---- sections keyed to screen order ---- */
+  section{padding-top:46px}
+  .sec-head{display:grid; gap:4px; margin-bottom:18px}
+  .eyebrow{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:11px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:650;
+  }
+  h2{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:clamp(23px,3.2vw,30px); letter-spacing:-.02em; font-weight:700;
+    margin:0; line-height:1.18; text-wrap:balance;
+  }
+  h3{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:16px; font-weight:680; margin:30px 0 8px; letter-spacing:-.01em;
+  }
+  p{margin:0 0 15px}
+  a{color:var(--accent); text-underline-offset:3px}
+  strong{font-weight:640}
+
+  /* ---- the replica: real dashboard markup, annotated ---- */
+  .stage{
+    background:var(--sunk); border:1px solid var(--rule-soft); border-radius:14px;
+    padding:20px; margin:22px 0; overflow-x:auto;
+  }
+  .stage-cap{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-3); margin-bottom:12px; font-weight:650;
+  }
+  .row{
+    background:var(--surface); border:1px solid var(--rule);
+    border-left:4px solid var(--long); border-radius:10px;
+    padding:12px 14px; min-width:440px; box-shadow:var(--shadow);
+  }
+  .row.chop{border-left-color:var(--chop)}
+  .row.short{border-left-color:var(--short)}
+  .r-top{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+  .tkr{font-weight:750; font-size:16px; letter-spacing:.01em; min-width:52px}
+  .score{font-size:16px; font-weight:700; font-variant-numeric:tabular-nums}
+  .vd{font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3)}
+  .px{margin-left:auto; font-size:13px; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .r-mid{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-3); margin-top:7px}
+  .r-bot{display:flex; gap:6px; flex-wrap:wrap; margin-top:9px}
+  .badge{
+    font-size:10.5px; padding:3px 9px; border-radius:999px;
+    border:1px solid var(--rule); color:var(--ink-3); white-space:nowrap;
+  }
+  .badge.hot{border-color:var(--chop); color:var(--chop); background:var(--chop-bg)}
+  .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:11px}
+  .chip{
+    font-size:10.5px; padding:3px 9px; border-radius:6px;
+    border:1px solid var(--rule); color:var(--ink-3);
+    font-variant-numeric:tabular-nums; white-space:nowrap;
+  }
+  .chip.pos{border-color:var(--long); color:var(--long); background:var(--long-bg)}
+  .chip.neg{border-color:var(--short); color:var(--short); background:var(--short-bg)}
+  .chip .pxy{opacity:.7; font-size:9px; margin-left:4px}
+  .pos{color:var(--long)} .neg{color:var(--short)}
+
+  /* numbered callouts &#8212; a real spatial sequence, traced in reading order */
+  .pin{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; border-radius:50%; flex:none;
+    background:var(--accent); color:var(--pin-ink); font-size:10.5px; font-weight:700;
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    vertical-align:1px;
+  }
+  .keys{list-style:none; padding:0; margin:20px 0 0; display:grid; gap:13px}
+  .keys li{display:grid; grid-template-columns:22px 1fr; gap:12px; align-items:start; font-size:15.5px}
+  .keys .k{font-weight:640}
+
+  /* ---- tables ---- */
+  .tbl-wrap{overflow-x:auto; margin:20px 0; border:1px solid var(--rule-soft); border-radius:12px; background:var(--surface)}
+  table{border-collapse:collapse; width:100%; min-width:540px; font-size:14.5px}
+  th,td{padding:11px 14px; text-align:left; border-bottom:1px solid var(--rule-soft); vertical-align:top}
+  thead th{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:11px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:650; background:var(--sunk);
+  }
+  tbody tr:last-child td{border-bottom:0}
+  td.num{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums; white-space:nowrap}
+
+  /* ---- notes ---- */
+  .note{
+    border-left:3px solid var(--accent); background:var(--accent-soft);
+    padding:14px 18px; border-radius:0 10px 10px 0; margin:22px 0; font-size:15.5px;
+  }
+  .note.warn{border-left-color:var(--chop); background:var(--chop-bg)}
+  .note p:last-child{margin-bottom:0}
+  .note .lbl{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:700;
+    color:var(--accent); display:block; margin-bottom:5px;
+  }
+  .note.warn .lbl{color:var(--chop)}
+
+  code{
+    font-size:.88em; background:var(--sunk); padding:2px 6px; border-radius:5px;
+    border:1px solid var(--rule-soft);
+  }
+  hr{border:0; border-top:1px solid var(--rule); margin:52px 0 0}
+  footer{margin-top:34px; font-size:13px; color:var(--ink-3);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+
+  .verdict-key{display:grid; gap:10px; margin:20px 0}
+  .vk{
+    display:grid; grid-template-columns:auto auto 1fr; gap:14px; align-items:center;
+    background:var(--surface); border:1px solid var(--rule-soft);
+    border-left:4px solid var(--chop); border-radius:10px; padding:12px 15px; font-size:15px;
+  }
+  .vk.long{border-left-color:var(--long)} .vk.short{border-left-color:var(--short)}
+  .vk b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:15px; font-variant-numeric:tabular-nums}
+  .vk .nm{
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:11px; letter-spacing:.1em; text-transform:uppercase; font-weight:670; color:var(--ink-3);
+  }
+
+  @media (min-width:900px){
+    .wrap{padding-left:40px}
+    .sec-head{grid-template-columns:150px 1fr; align-items:baseline; gap:0 26px}
+    .sec-head .eyebrow{text-align:right; padding-top:7px}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    a{transition:opacity .15s}
+  }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="kicker">Perp Pulse &#183; Reader's Guide</div>
+  <h1>Reading Perp Pulse</h1>
+  <p class="standfirst">A pre-market radar for crypto perpetual futures. This guide explains every number on the screen &#8212; no knowledge of how it was built required.</p>
+  <div class="meta">
+    <span><b>Read time</b> ~6 minutes</span>
+    <span><b>Audience</b> anyone looking at the screen</span>
+    <span><b>Covers</b> the matrix, the score, the badges, the limits</span>
+  </div>
+</header>
+
+<div class="col">
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">Start here</div>
+    <h2>What this tool is for</h2>
+  </div>
+  <p>Perp Pulse answers <strong>two questions, at two different moments.</strong> Everything on screen serves one of them.</p>
+  <p><strong>Before the trading day (1&#8211;2 minutes).</strong> Scan the whole watchlist at once: which coins are leaning bullish, which are leaning bearish, which are sitting at a price level worth watching. This is the main grid.</p>
+  <p><strong>When an alert fires (30 seconds).</strong> A price alert triggers on one coin. Tap its row. The question becomes narrower: <em>is this dip a normal pullback, or is it a collapse in progress?</em></p>
+  <div class="note">
+    <span class="lbl">What it is not</span>
+    <p>It is not a trading bot, it does not place orders, and it does not tell anyone to buy or sell. It aggregates public exchange data into one screen. Every decision is still made by the person reading it.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">Screen order &#183; 1</div>
+    <h2>The top strip</h2>
+  </div>
+  <p>Three market-wide numbers sit above the grid, in a deliberately muted box. They are <strong>context only</strong> &#8212; they never affect any score.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Reading</th><th>Plain meaning</th><th>Rough intuition</th></tr></thead>
+      <tbody>
+        <tr><td class="num">BTC.D</td><td>Bitcoin's share of the total crypto market</td><td>Rising = money crowding into Bitcoin, often at the expense of smaller coins</td></tr>
+        <tr><td class="num">USDT.D</td><td>Stablecoins' share of the total market</td><td>Rising = money sitting in cash, waiting. Often a risk-off tell</td></tr>
+        <tr><td class="num">TOTAL3</td><td>Total market value excluding Bitcoin and Ethereum</td><td>A proxy for how much money is in everything else</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Beside them is an <strong>ETF button</strong>. It shows how much money flowed into or out of US spot Bitcoin ETFs on the last reported day. Tapping it cycles to a manual setting, for days when the source is unavailable.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">Screen order &#183; 2</div>
+    <h2>Reading one row</h2>
+  </div>
+  <p>Each coin in the watchlist gets one row. Rows are sorted so the <strong>most extreme readings float to the top</strong> &#8212; anything sitting in the middle sinks. Here is a real row, annotated:</p>
+
+  <div class="stage">
+    <div class="stage-cap">Live component &#8212; this is exactly what a row looks like</div>
+    <div class="row">
+      <div class="r-top">
+        <span class="tkr mono">SOL</span>
+        <span class="score mono pos">+4</span>
+        <span class="vd">Clear to long</span>
+        <span class="px mono">152.40 <span class="pos">+0.41%</span></span>
+      </div>
+      <div class="r-mid mono">
+        <span>DISCOUNT &#183; +1.87% above 4H low</span>
+        <span class="pos">OI &#8593; +0.66%</span>
+        <span class="pos">Fund &#8595; -0.0006%</span>
+      </div>
+      <div class="r-bot">
+        <span class="badge mono">Bull FVG 0.57%</span>
+        <span class="badge mono">TREND &#8593;</span>
+        <span class="badge hot mono">PDL swept + reclaimed</span>
+      </div>
+      <div class="chips">
+        <span class="chip pos mono">ETF +1<span class="pxy">proxy</span></span>
+        <span class="chip pos mono">Fund +1</span>
+        <span class="chip mono">OI 0</span>
+        <span class="chip pos mono">EMA +1</span>
+        <span class="chip pos mono">Sweep +1</span>
+      </div>
+    </div>
+  </div>
+
+  <ul class="keys">
+    <li><span class="pin">1</span><div><span class="k">SOL &nbsp;+4 &nbsp;Clear to long</span> &#8212; the coin, its score from &#8722;5 to +5, and the plain-language verdict that score maps to.</div></li>
+    <li><span class="pin">2</span><div><span class="k">152.40 &nbsp;+0.41%</span> &#8212; current price, and how much it has moved in the last hour.</div></li>
+    <li><span class="pin">3</span><div><span class="k">DISCOUNT &#183; +1.87% above 4H low</span> &#8212; where price sits inside its recent range. <em>Discount</em> means the lower half, <em>Premium</em> the upper half. A trader looking to buy generally wants discount.</div></li>
+    <li><span class="pin">4</span><div><span class="k">OI &#8593; &nbsp;Fund &#8595;</span> &#8212; two derivatives readings. See the glossary below.</div></li>
+    <li><span class="pin">5</span><div><span class="k">The pill badges</span> &#8212; notable conditions worth an eye. Amber ones are the most significant.</div></li>
+    <li><span class="pin">6</span><div><span class="k">The five small chips</span> &#8212; the score broken into its parts, so the total is never a black box. Green added a point, red subtracted one, grey was neutral.</div></li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">The number</div>
+    <h2>How the score is built</h2>
+  </div>
+  <p>Five independent checks. Each one can add <strong>+1</strong>, subtract <strong>&#8722;1</strong>, or stay at <strong>0</strong>. They are added together &#8212; nothing is weighted, nothing is hidden.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Check</th><th>What it looks at</th><th style="color:var(--long)">+1 when</th><th style="color:var(--short)">&#8722;1 when</th></tr></thead>
+      <tbody>
+        <tr><td class="num">ETF</td><td>Money into or out of US spot Bitcoin ETFs</td><td>More than $50M in</td><td>More than $50M out</td></tr>
+        <tr><td class="num">Fund</td><td>The fee traders pay to hold a position. Negative means short sellers are paying &#8212; a crowded downside</td><td>Below 0%</td><td>Above 0.015%</td></tr>
+        <tr><td class="num">OI</td><td>Whether new money is entering as price moves</td><td>Price up with new positions opening</td><td>Price down with positions closing</td></tr>
+        <tr><td class="num">EMA</td><td>Price versus its 4-hour trend line</td><td>Closed above it</td><td>Closed below it</td></tr>
+        <tr><td class="num">Sweep</td><td>Whether price broke yesterday's high or low and then reversed</td><td>Broke the low, then recovered</td><td>Broke the high, then failed</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="verdict-key">
+    <div class="vk long"><b>+3 to +5</b><span class="nm">Clear to long</span><span>Conditions lean bullish. Look for entries in the lower half of the range.</span></div>
+    <div class="vk"><b>&#8722;2 to +2</b><span class="nm">Choppy / range</span><span>No agreement between the checks. Most days look like this.</span></div>
+    <div class="vk short"><b>&#8722;3 to &#8722;5</b><span class="nm">Clear to short</span><span>Conditions lean bearish. Look for entries in the upper half of the range.</span></div>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">A high score is not a signal to trade</span>
+    <p><strong>+4 means four of five checks agree &#8212; nothing more.</strong> It says the background conditions lean one way. It says nothing about entry price, risk, or timing, and it cannot see chart structure. Treat it as one input, never as an instruction.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">Screen order &#183; 3</div>
+    <h2>The panel that opens when you tap</h2>
+  </div>
+  <p>Tapping a row opens a detail panel with two clearly separated blocks. <strong>They can disagree, and that is intentional</strong> &#8212; the single most confusing thing about this screen if nobody explains it.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Block</th><th>The question it answers</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Bias</strong></td><td>Which way are conditions leaning overall?</td></tr>
+        <tr><td><strong>Pullback health</strong></td><td>Right now, is this dip orderly or is it a cascade?</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Take a falling price where traders are closing positions. <strong>Bias</strong> calls that bearish &#8212; people are giving up. <strong>Pullback health</strong> calls it healthy &#8212; leveraged bets are being cleared out, which usually makes a violent continuation <em>less</em> likely.</p>
+  <p>Both readings are correct. They answer different questions. That is why they sit in separate boxes with their questions written above them, and why they are never added together.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">Glossary</div>
+    <h2>The badges and terms</h2>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="num">Open Interest (OI)</td><td>How many positions are currently open. Rising = new money entering; falling = positions being closed</td></tr>
+        <tr><td class="num">Funding</td><td>A small recurring fee between traders. Positive = buyers pay sellers (crowded upside); negative = the reverse</td></tr>
+        <tr><td class="num">Discount / Premium</td><td>Price in the lower / upper half of its recent 4-hour range</td></tr>
+        <tr><td class="num">Bull FVG 0.57%</td><td>A price gap left by a fast move, 0.57% away. Such gaps often get revisited</td></tr>
+        <tr><td class="num">TREND &#8593; / RANGE</td><td>Whether price is breaking to new levels, or oscillating in a band</td></tr>
+        <tr><td class="num">PDL swept + reclaimed</td><td>Price dipped below yesterday's low and then recovered &#8212; often a sign the dip was hunting stop-losses</td></tr>
+        <tr><td class="num">PDH swept + rejected</td><td>The mirror image: poked above yesterday's high and failed</td></tr>
+        <tr><td class="num">fresh shorts</td><td>Price falling while new positions open &#8212; active selling, not just people exiting</td></tr>
+        <tr><td class="num">short covering</td><td>Price rising because sellers are buying back, not because of new buyers. Weaker fuel</td></tr>
+        <tr><td class="num" style="color:var(--accent)">proxy</td><td>On the ETF chip: this is Bitcoin's ETF figure applied to another coin, because only Bitcoin has spot ETFs. It is background weather, not that coin's own data</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">Important</div>
+    <h2>When not to trust the screen</h2>
+  </div>
+  <p>Three things are worth checking before relying on anything shown.</p>
+  <h3>An amber banner across the top</h3>
+  <p>Data is more than 10 minutes old and the grid dims. A refresh failed. <strong>Do not read prices off a dimmed screen</strong> &#8212; this warning exists specifically because showing stale prices as if live is the worst thing this tool could do.</p>
+  <h3>A row showing an error instead of numbers</h3>
+  <p>That coin's data could not be fetched. The remaining rows are unaffected and still valid &#8212; failures are isolated to one row on purpose.</p>
+  <h3>Chips reading <code>ETF 0</code> or a value marked <code>proxy</code></h3>
+  <p>ETF flows publish once a day on US business days, so the figure is often stale or unavailable &#8212; and outside Bitcoin it is always borrowed. That check is the weakest of the five.</p>
+  <div class="note">
+    <span class="lbl">Two structural limits</span>
+    <p><strong>Days are measured in UTC</strong>, so "yesterday's high" follows the exchange clock, not local time. And <strong>order-book readings are shallow</strong> &#8212; they cover roughly the nearest 1% of price and can be withdrawn instantly, so they are a hint, never a trigger.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">Scope</div>
+    <h2>What it deliberately leaves out</h2>
+  </div>
+  <p>Some absences are choices, not gaps. There is <strong>no liquidation heatmap</strong> (no free source good enough to trust), <strong>no chart</strong> (that is what TradingView is for), and <strong>no alerting</strong> &#8212; the screen never pushes anything. It is opened deliberately, read, and closed.</p>
+  <p>The watchlist is fixed on purpose. A short, stable list is easier to know well than a long one that changes constantly.</p>
+</section>
+
+<hr>
+<footer>
+  <p>Perp Pulse is a personal research tool for reading public market data. It is not financial advice, and it makes no recommendation to buy or sell anything.</p>
+</footer>
+
+</div>
+</div>
