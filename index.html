@@ -4,340 +4,44 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0B0E14">
-<title>BTC Pulse</title>
+<title>Perp Pulse</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#0B0E14; --card:#11151F; --border:#1E2530;
-    --text:#E6EAF2; --muted:#8A94A6;
-    --up:#2FBF71; --down:#E5484D; --warn:#F5A623; --steel:#5B8DEF;
-  }
-  *{box-sizing:border-box; margin:0; padding:0}
-  html{-webkit-text-size-adjust:100%}
-  body{
-    background:var(--bg); color:var(--text);
-    font-family:'IBM Plex Mono', ui-monospace, monospace;
-    min-height:100vh; padding:16px 14px calc(24px + env(safe-area-inset-bottom));
-    max-width:520px; margin:0 auto;
-  }
-  header{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
-  h1{font-family:'Space Grotesk',sans-serif; font-size:20px; font-weight:700; letter-spacing:.02em}
-  h1 span{color:var(--steel)}
-  #refresh{
-    background:var(--card); border:1px solid var(--border); color:var(--text);
-    font:inherit; font-size:13px; padding:9px 16px; border-radius:8px; cursor:pointer;
-    transition:border-color .15s;
-  }
-  #refresh:active{border-color:var(--steel)}
-  #refresh:focus-visible{outline:2px solid var(--steel); outline-offset:2px}
-  #refresh[disabled]{opacity:.5}
-
-  .pairs{display:flex; gap:6px; overflow-x:auto; margin-bottom:12px; padding-bottom:2px; -webkit-overflow-scrolling:touch}
-  .pairs::-webkit-scrollbar{display:none}
-  .chip{
-    background:var(--card); border:1px solid var(--border); color:var(--muted);
-    font:inherit; font-size:12px; padding:6px 12px; border-radius:999px; cursor:pointer;
-    white-space:nowrap; flex:none; transition:border-color .12s, color .12s;
-  }
-  .chip.active{color:var(--text); border-color:var(--steel)}
-  .chip:active{transform:scale(.96)}
-
-  .verdict{
-    border:1px solid var(--border); border-left:4px solid var(--muted);
-    background:var(--card); border-radius:10px; padding:14px 14px 12px; margin-bottom:12px;
-  }
-  .verdict.ok{border-left-color:var(--up)}
-  .verdict.risk{border-left-color:var(--down)}
-  .verdict.mixed{border-left-color:var(--warn)}
-  .verdict .tag{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:6px}
-  .verdict p{font-size:13.5px; line-height:1.55}
-
-  .price-card{
-    background:var(--card); border:1px solid var(--border); border-radius:10px;
-    padding:14px; margin-bottom:12px; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
-  }
-  .price-card .px{font-size:30px; font-weight:600; letter-spacing:-.01em; font-variant-numeric:tabular-nums}
-  .price-card .chg{font-size:13px}
-
-  .grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
-  .stat{
-    background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px;
-  }
-  .stat .label{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:6px}
-  .stat .val{font-size:17px; font-weight:500; font-variant-numeric:tabular-nums}
-  .stat .sub{font-size:11px; color:var(--muted); margin-top:4px}
-  .pos{color:var(--up)} .neg{color:var(--down)} .warn{color:var(--warn)}
-
-  /* Order-book walls */
-  .book{
-    background:var(--card); border:1px solid var(--border); border-radius:10px;
-    padding:12px 14px; margin-top:12px;
-  }
-  .book .label{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:10px}
-  .wall-row{display:flex; align-items:baseline; gap:8px; font-variant-numeric:tabular-nums}
-  .wall-row .side{font-size:11px; color:var(--muted); width:64px; flex:none}
-  .wall-row .wprice{font-size:15px; font-weight:500}
-  .wall-row .wdist{font-size:12px}
-  .wall-row .wsize{font-size:11px; color:var(--muted); margin-left:auto}
-  .wall-sub{font-size:10px; color:var(--muted); margin:3px 0 0 72px; min-height:0}
-  .imbal{height:6px; border-radius:3px; background:var(--down); margin:10px 0; overflow:hidden; position:relative}
-  .imbal-fill{height:100%; background:var(--up); width:50%; transition:width .3s}
-  .imbal-cap{font-size:11px; color:var(--muted); display:flex; justify-content:space-between}
-
-  footer{margin-top:14px; font-size:11px; color:var(--muted); display:flex; justify-content:space-between}
-  #err{
-    display:none; background:#2A1215; border:1px solid #5C2226; color:#F2B8B5;
-    border-radius:10px; padding:12px; font-size:12.5px; line-height:1.5; margin-bottom:12px;
-  }
-  .skeleton{color:var(--muted)}
-  @media (prefers-reduced-motion: no-preference){
-    .updating{animation:pulse .8s ease-in-out infinite}
-    @keyframes pulse{50%{opacity:.45}}
-  }
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header>
-  <h1><span id="sym">BTC</span><span>·</span>PULSE</h1>
-  <button id="refresh" onclick="load()">Refresh</button>
+  <h1>PERP<span>·</span>PULSE</h1>
+  <div class="hdr-actions">
+    <button id="etf-toggle" class="ghost" title="Spot ETF net flow — score layer 1">ETF —</button>
+    <button id="refresh" class="ghost">Refresh</button>
+  </div>
 </header>
 
-<div class="pairs" id="pairs"></div>
-
-<div id="err"></div>
-
-<div class="verdict" id="verdict">
-  <div class="tag">Read</div>
-  <p id="verdict-text" class="skeleton">Tap refresh to pull live data.</p>
+<div class="weather" id="weather">
+  <div class="w-item"><span class="w-label">BTC.D</span><span class="w-val" id="w-btcd">—</span></div>
+  <div class="w-item"><span class="w-label">USDT.D</span><span class="w-val" id="w-usdtd">—</span></div>
+  <div class="w-item"><span class="w-label">TOTAL3</span><span class="w-val" id="w-total3">—</span></div>
 </div>
 
-<div class="price-card">
-  <div class="px" id="px">—</div>
-  <div class="chg" id="chg1h">1h —</div>
-  <div class="chg" id="chg4h">4h —</div>
-  <div class="chg" id="chg24h">24h —</div>
-</div>
+<div id="stale" class="stale" hidden></div>
+<div id="err" hidden></div>
 
-<div class="grid">
-  <div class="stat"><div class="label">Funding rate</div><div class="val" id="funding">—</div><div class="sub" id="funding-sub"></div></div>
-  <div class="stat"><div class="label">Next funding</div><div class="val" id="nextf">—</div><div class="sub">countdown</div></div>
-  <div class="stat"><div class="label">Open interest (agg)</div><div class="val" id="oi">—</div><div class="sub" id="oi-usd"></div></div>
-  <div class="stat"><div class="label">OI Δ 1h / 4h</div><div class="val" id="oid">—</div><div class="sub">Bybit positioning</div></div>
-  <div class="stat"><div class="label">Taker buy/sell</div><div class="val" id="taker">—</div><div class="sub">1h aggressor flow</div></div>
-  <div class="stat"><div class="label">Long / short</div><div class="val" id="topls">—</div><div class="sub" id="topls-sub">positions, 1h</div></div>
-</div>
+<main id="matrix" class="matrix"></main>
 
-<div class="book">
-  <div class="label">Order-book walls · immediate book <span id="book-cov"></span></div>
-  <div class="wall-row"><span class="side">Ask wall</span><span class="wprice" id="askw">—</span><span class="wdist neg" id="askd"></span><span class="wsize" id="asksz"></span></div>
-  <div class="wall-sub" id="askheavy"></div>
-  <div class="imbal"><div class="imbal-fill" id="imbalfill"></div></div>
-  <div class="imbal-cap"><span id="imbal-bid">bid —</span><span id="imbal-ask">— ask</span></div>
-  <div class="wall-row"><span class="side">Bid wall</span><span class="wprice" id="bidw">—</span><span class="wdist pos" id="bidd"></span><span class="wsize" id="bidsz"></span></div>
-  <div class="wall-sub" id="bidheavy"></div>
-</div>
+<section id="detail" class="detail" hidden></section>
+
+<details class="legend">
+  <summary>Sanity check legend</summary>
+  <p><b>Normal pullback 🟢</b> — OI stable or rising (absorption) + funding neutral or negative.</p>
+  <p><b>Aggressive dump 🔴</b> — heavy OI flush (cascade) + funding heavily positive + ETF outflows.</p>
+</details>
 
 <footer>
-  <div id="src">source: —</div>
-  <div id="ts"></div>
+  <span id="src">—</span>
+  <span id="ts"></span>
 </footer>
 
-<script>
-// The data proxy Worker. Set it once via ?api=<url> (saved to localStorage),
-// or hardcode your deployed Worker URL below.
-const params = new URLSearchParams(location.search);
-if (params.get('api')) localStorage.setItem('ppd_api', params.get('api'));
-const WORKER_URL = params.get('api')
-  || localStorage.getItem('ppd_api')
-  || 'https://perp-pulse-data.perp-pulse-data.workers.dev';
-
-// Selectable pairs (must match the Worker's allowlist). HYPE degrades to
-// Bybit-only if OKX has no stats for it — handled server-side.
-const PAIRS = ['BTC','ETH','SOL','XRP','BNB','DOGE','ADA','LINK','SUI','HYPE'];
-if (params.get('symbol')) localStorage.setItem('ppd_symbol', params.get('symbol').toUpperCase());
-let SYMBOL = (params.get('symbol') || localStorage.getItem('ppd_symbol') || 'BTC').toUpperCase();
-if (!PAIRS.includes(SYMBOL)) SYMBOL = 'BTC';
-
-const $ = id => document.getElementById(id);
-const fmtPct = (v, dp=2) => (v>=0?'+':'') + v.toFixed(dp) + '%';
-const cls = v => v>=0 ? 'pos' : 'neg';
-const fmtUsd = v => v>=1e9 ? '$'+(v/1e9).toFixed(2)+'B' : '$'+(v/1e6).toFixed(0)+'M';
-// Coin-amount formatter (OI / wall sizes are denominated in the base coin, which
-// varies by pair — e.g. thousands of BTC vs billions of DOGE).
-const fmtCoin = v => v>=1e9 ? (v/1e9).toFixed(2)+'B'
-  : v>=1e6 ? (v/1e6).toFixed(2)+'M'
-  : v>=1e3 ? (v/1e3).toFixed(1)+'k'
-  : v.toFixed(1);
-// Price formatter: decimals scale with magnitude (BTC ~63k vs DOGE ~0.38).
-const fmtPrice = v => v>=1000 ? v.toLocaleString('en-US',{maximumFractionDigits:0})
-  : v>=1 ? v.toLocaleString('en-US',{maximumFractionDigits:2})
-  : v.toLocaleString('en-US',{maximumFractionDigits:5});
-
-function buildChips(){
-  const box = $('pairs');
-  box.innerHTML = '';
-  for(const p of PAIRS){
-    const b = document.createElement('button');
-    b.className = 'chip' + (p===SYMBOL?' active':'');
-    b.textContent = p;
-    b.onclick = () => selectPair(p);
-    box.appendChild(b);
-  }
-}
-function selectPair(p){
-  if(p===SYMBOL) return;
-  SYMBOL = p;
-  localStorage.setItem('ppd_symbol', p);
-  $('sym').textContent = p;
-  buildChips();
-  load();
-}
-
-function countdown(ts){
-  const s = Math.max(0, ts - Date.now());
-  const h = Math.floor(s/3.6e6), m = Math.floor(s%3.6e6/6e4);
-  return h+'h '+String(m).padStart(2,'0')+'m';
-}
-
-function render(d){
-  const p = d.price;
-  $('px').textContent = fmtPrice(p.mark);
-  for(const [id,v] of [['chg1h',p.chg1h],['chg4h',p.chg4h],['chg24h',p.chg24h]]){
-    $(id).textContent = id.replace('chg','')+' '+fmtPct(v);
-    $(id).className = 'chg '+cls(v);
-  }
-
-  const f = d.funding;
-  $('funding').textContent = f.rate.toFixed(4)+'%';
-  $('funding').className = 'val '+(f.rate>=0.02?'warn':f.rate<0?'neg':'');
-  $('funding-sub').textContent = 'annualized ~'+(f.rate*3*365).toFixed(1)+'%';
-  $('nextf').textContent = countdown(f.nextFundingTime);
-
-  const oi = d.oi;
-  $('oi').textContent = fmtCoin(oi.aggBtc)+' '+SYMBOL;
-  const nVenues = Object.values(oi.venues).filter(v=>v!=null).length;
-  $('oi-usd').textContent = fmtUsd(oi.aggUsd)+' · '+nVenues+' venues';
-  $('oid').innerHTML = `<span class="${cls(oi.d1h)}">${fmtPct(oi.d1h)}</span> / <span class="${cls(oi.d4h)}">${fmtPct(oi.d4h)}</span>`;
-
-  const pos = d.positioning;
-  $('taker').textContent = pos.taker==null?'n/a':pos.taker.toFixed(3);
-  $('topls').textContent = pos.topLS==null?'n/a':pos.topLS.toFixed(3);
-  if(pos.source) $('topls-sub').textContent = pos.source;
-
-  // Order-book walls (band + significance model; nearest = the gap)
-  const bk = d.book;
-  if(bk){
-    const paintSide = (side, wEl, dEl, szEl, heavyEl) => {
-      const nw = side.nearestWall;
-      if(nw){
-        $(wEl).textContent = fmtPrice(nw.price);
-        $(dEl).textContent = fmtPct(nw.distPct);
-        $(szEl).textContent = fmtCoin(nw.size)+' '+SYMBOL;
-      }else{
-        $(wEl).textContent = 'smooth';
-        $(dEl).textContent = '';
-        $(szEl).textContent = 'no distinct wall';
-      }
-      const mw = side.maxWall; // show heaviest only when it's not the nearest
-      $(heavyEl).textContent = (mw && nw && mw.price !== nw.price)
-        ? 'heaviest '+fmtPct(mw.distPct)+' · '+fmtCoin(mw.size)+' '+SYMBOL : '';
-    };
-    paintSide(bk.ask, 'askw','askd','asksz','askheavy');
-    paintSide(bk.bid, 'bidw','bidd','bidsz','bidheavy');
-    const bidShare = Math.round(bk.imbalancePct);
-    $('imbalfill').style.width = bidShare+'%';
-    $('imbal-bid').textContent = 'bid '+bidShare+'%';
-    $('imbal-ask').textContent = (100-bidShare)+'% ask';
-    const cov = Math.max(bk.ask.coveredPct||0, bk.bid.coveredPct||0);
-    const venue = bk.source ? bk.source.split(' ')[0] : '';
-    $('book-cov').textContent = '(±'+cov.toFixed(2)+'% · '+venue+')';
-  }
-
-  // Verdict (computed server-side, single source of truth)
-  const vd = $('verdict');
-  vd.className = 'verdict '+d.verdict.cls;
-  $('verdict-text').textContent = d.verdict.msg;
-  $('verdict-text').classList.remove('skeleton');
-
-  $('src').textContent = 'source: '+d.source;
-  $('ts').textContent = new Date().toLocaleTimeString();
-}
-
-// Hybrid enrichment: Binance is geo-blocked from the Worker's edge, but YOUR
-// device (phone / VPN) can often reach it directly. So after the OKX/Bybit
-// baseline renders, try Binance straight from the browser and enrich the cards.
-// On a blocked network these fail fast (timeout) and we silently keep baseline.
-const BINANCE = 'https://fapi.binance.com';
-async function jTimeout(url, ms=2500){
-  const ctrl = new AbortController();
-  const t = setTimeout(()=>ctrl.abort(), ms);
-  try{
-    const r = await fetch(url, {signal:ctrl.signal});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    return await r.json();
-  } finally { clearTimeout(t); }
-}
-
-async function enrichBinance(d){
-  let ok = false;
-  // Add Binance to aggregated OI (fapi/v1 endpoint — usually CORS-friendly)
-  const at = SYMBOL, S = SYMBOL + 'USDT';
-  try{
-    const oi = await jTimeout(BINANCE+'/fapi/v1/openInterest?symbol='+S);
-    if(SYMBOL !== at) return;                 // pair switched while fetching
-    const venues = {...d.oi.venues, binance:+oi.openInterest};
-    const parts = Object.values(venues).filter(v=>v!=null);
-    const aggBtc = parts.reduce((s,v)=>s+v,0);
-    $('oi').textContent = fmtCoin(aggBtc)+' '+SYMBOL;
-    $('oi-usd').textContent = fmtUsd(aggBtc*d.price.mark)+' · '+parts.length+' venues';
-    ok = true;
-  }catch(e){}
-  // Binance taker buy/sell + TOP-trader L/S (futures/data endpoints)
-  try{
-    const [taker, topls] = await Promise.all([
-      jTimeout(BINANCE+'/futures/data/takerlongshortRatio?symbol='+S+'&period=1h&limit=1'),
-      jTimeout(BINANCE+'/futures/data/topLongShortPositionRatio?symbol='+S+'&period=1h&limit=1'),
-    ]);
-    if(SYMBOL !== at) return;                 // pair switched while fetching
-    $('taker').textContent = (+taker[0].buySellRatio).toFixed(3);
-    $('topls').textContent = (+topls[0].longShortRatio).toFixed(3);
-    $('topls-sub').textContent = 'Binance top-trader';
-    ok = true;
-  }catch(e){}
-  if(ok) $('src').textContent = 'source: '+d.source+' + Binance (direct)';
-}
-
-async function load(){
-  const btn = $('refresh');
-  btn.disabled = true; btn.textContent = '…';
-  $('err').style.display='none';
-  document.body.classList.add('updating');
-  const at = SYMBOL;
-  try{
-    const u = new URL(WORKER_URL); u.searchParams.set('symbol', SYMBOL);
-    const r = await fetch(u);
-    const d = await r.json();
-    if(!r.ok || d.error) throw new Error(d.detail || d.error || ('HTTP '+r.status));
-    if(SYMBOL !== at) return;                 // user switched pair mid-request
-    render(d);
-    enrichBinance(d); // non-blocking: enrich with direct Binance if reachable
-  }catch(e){
-    $('err').style.display='block';
-    if(WORKER_URL.includes('YOUR-SUBDOMAIN')){
-      $('err').textContent = 'No data proxy configured yet. Deploy the Worker, then open this page with ?api=<your-worker-url> once (it will be remembered).';
-    }else{
-      $('err').textContent = 'Could not reach the data proxy. ('+e.message+')';
-    }
-  }finally{
-    btn.disabled = false; btn.textContent = 'Refresh';
-    document.body.classList.remove('updating');
-  }
-}
-
-$('sym').textContent = SYMBOL;
-buildChips();
-load();
-</script>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>
