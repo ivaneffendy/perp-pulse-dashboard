@@ -1,107 +1,147 @@
 # perp-pulse-dashboard
 
-A personal, mobile-first **BTC perps confluence dashboard**. It is a quick
-"read the tape at my POI" tool — **not** a trading bot and not an alerting
-system. The owner is a discretionary crypto trader who marks POIs / market
-structure and waits for confirmation before entry. When a TradingView alert
-fires and price reaches a POI, they open this on their phone for one extra
-confluence check: *is this pullback healthy (deleveraging) or risky (fresh
-shorts / aggressive selling)?* before committing to an entry.
+A personal, mobile-first **crypto perps confluence dashboard**. It is a quick
+"read the tape" tool — **not** a trading bot and not an alerting system. The
+owner is a discretionary trader running an SMC / institutional-S&D playbook
+around a 9-to-5 job.
 
-Owner is a software engineer, so code work is fine.
+It serves **two distinct phases**, and every feature should trace to one:
+
+- **Phase 1 — pre-market radar (1–2 min).** Scan the whole watchlist, get a
+  −5..+5 bias score per asset, see which coins sit at extreme POIs. Playbook §II
+  makes this the *first action* of the daily routine.
+- **Phase 2 — alert sanity check (30 s).** A TradingView alert fires at a POI:
+  *is this a healthy pullback (absorption) or a falling knife (cascade)?*
 
 ## Architecture
 
 ```
-Phone browser
-  → GitHub Pages          static page (index.html)
-       → Cloudflare Worker  (worker/) — CORE data. Fetches Bybit + OKX
-       │                     server-side, computes the verdict, returns JSON.
-       │      → Bybit / OKX public REST   (reachable from the edge)
-       │      → Binance fapi              (OPPORTUNISTIC — usually geo-blocked)
-       └→ Binance fapi DIRECT (hybrid enrichment, client-side)
-              Runs from the USER's device. On phone/VPN it reaches Binance and
-              enriches taker + top-trader L/S + OI; on blocked networks it
-              times out silently and the OKX/Bybit baseline stands.
+Phone browser (GitHub Pages, static, no build step)
+  ├─ GET /macro              ─▶ Worker ─▶ CoinGecko (dominance), Farside (ETF)
+  ├─ GET /asset?symbol=BTC   ─▶ Worker ─▶ Bybit  (4 calls) + macro (2, cached)
+  ├─ GET /asset?symbol=ETH   ─▶ Worker      … one request per watchlist asset,
+  │  … fanned out in parallel                  fired concurrently
+  └─ GET /asset?symbol=X&deep=1 ─▶ Worker ─▶ + OKX + Binance + Bybit book (~14)
+       └─ Binance fapi DIRECT from the device (hybrid client-side enrichment)
 ```
 
-### Regional reality (important)
-Binance (`fapi.binance.com`) is **geo-blocked in Indonesia**, and the Cloudflare
-edge nearest the user (Jakarta) hits the same block — so the Worker cannot rely
-on Binance. The Worker therefore runs on **Bybit (core) + OKX (extras)**. Binance
-is recovered two ways: (1) opportunistically inside the Worker if ever reachable,
-and (2) a **hybrid client-side fetch** in `index.html` that uses the *user's own*
-network (phone/VPN can reach Binance even when the edge can't). Both degrade
-gracefully to the OKX/Bybit baseline.
-
-- **`index.html`** — single-file dashboard. Pure renderer: it fetches the
-  Worker and paints the payload. It contains **no** market logic. Deployed via
-  GitHub Pages. Configure the Worker URL via `?api=<url>` (persisted to
-  `localStorage` as `ppd_api`) or by hardcoding `WORKER_URL`. Pair is chosen via
-  the chip row / `?symbol=<BASE>` (persisted as `ppd_symbol`).
-- **`worker/`** — Cloudflare Worker (`wrangler.toml` + `src/index.js`). Stateless
-  read-through proxy. This is where **all** data-fetching and the `verdict()`
-  logic live. Deploy with `npx wrangler deploy` from `worker/`.
+### Why fan out instead of one `/matrix` call
+A Worker invocation is capped at **50 subrequests** on the free plan. One request
+per asset holds each invocation at ~6 regardless of watchlist size, and the
+matrix renders **progressively** — a slow venue on one symbol cannot blank the
+other rows. ~9 requests per refresh; ~900/day against a 100k/day limit.
 
 ### Why the Worker exists (do not remove it)
 The browser cannot call the exchanges directly:
-- Binance `futures/data/*` endpoints send **no CORS headers**.
-- Binance `fapi` is **geo-blocked** in some regions.
-The Worker sidesteps both — the fetch happens at Cloudflare's edge, and it
-returns permissive CORS. The page only ever talks to the Worker.
+- Binance `futures/data/*` sends **no CORS headers**.
+- Binance `fapi` is **geo-blocked** in Indonesia — and the Cloudflare edge
+  nearest the user (Jakarta) hits the same block.
 
-### Single source of truth
-`verdict()` lives **only** in the Worker. When the planned TradingView →
-Telegram push worker is built, it must reuse that same `verdict()` — do not
-duplicate the read logic into the page or a second worker. Keep it shared.
+So the Worker runs on **Bybit (core) + OKX (extras)**, and Binance is recovered
+two ways: opportunistically inside the Worker, and via a **hybrid client-side
+fetch** in `src/binance-enrich.js` that uses the *user's own* network. Both
+degrade silently to the Bybit/OKX baseline.
+
+## Layout
+
+```
+index.html          markup shell only
+styles.css
+src/
+  main.js           boot, 5-min refresh, visibility pause, staleness, watchlist
+  api.js            Worker client: fan-out, 8s timeout, per-asset failure
+  matrix.js         Phase 1 grid + score chips
+  detail.js         Phase 2 panel
+  weather.js        BTC.D / USDT.D / TOTAL3 + manual ETF toggle
+  format.js         per-symbol price / coin / percent formatters
+  binance-enrich.js client-side Binance enrichment
+worker/src/
+  index.js          routing + CORS only — NO market logic
+  pairs.js          allowlist + per-venue symbol mapping
+  sources/          bybit · okx · binance · macro   (fetch + normalize)
+  compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
+  score.js          §VII bias engine        ─┐ both exported,
+  verdict.js        Phase 2 pullback health ─┘ NEVER summed
+worker/test/        node --test suites (63 tests)
+```
+
+Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
+Page deploys itself via GitHub Pages — no build step.
+
+### Two engines, one codebase — this is deliberate
+`score.js` and `verdict.js` **give opposite signs on price-down + OI-down**:
+
+| price ↓ + OI ↓ | |
+|---|---|
+| `score.js` (§VII bias) | `−1` bearish — *long flush* |
+| `verdict.js` (Phase 2) | `ok` — *deleveraging, POI has better odds* |
+
+Both are correct **for their own question**. Phase 1 asks "what is the bias?";
+Phase 2 asks "is this pullback safe to enter?". They are rendered in separate,
+separately-labelled blocks and must never be summed or averaged.
+`worker/test/verdict.test.js` has a test that asserts this divergence on purpose —
+if it fails because someone "fixed" the inconsistency, read the spec first.
+
+The planned TradingView → Telegram worker must **import `verdict.js`**, not
+reimplement it.
 
 ## Pairs
-Top-10 USDT perps, allowlisted in the Worker's `PAIRS` map (base → Bybit symbol
-/ OKX instId / rubik ccy / Binance symbol): BTC, ETH, SOL, XRP, BNB, DOGE, ADA,
-LINK, SUI, HYPE. `?symbol=<BASE>` is validated against this allowlist (defaults
-to BTC) so nothing arbitrary hits upstream URLs. **HYPE is at-risk**: its OKX
-data is unverified — if OKX returns empty it degrades to Bybit-only (taker/L-S →
-`n/a`), same as the Binance path. OI + wall sizes are in the *base coin*, so the
-page formats units per-symbol (thousands of BTC vs billions of DOGE).
+`DEFAULT_WATCHLIST` is playbook §II's fixed eight: BTC, ETH, SOL, NEAR, SUI,
+AVAX, LINK, ARB. `PAIRS` is wider (adds HYPE, WLD, RENDER, ZEC, ONDO, ASTER,
+JTO, XRP, BNB, DOGE, ADA) because the trade journal shows real rotation into
+coins outside §II. Override with `?watchlist=BTC,HYPE,...` (persisted to
+`localStorage.ppd_watchlist`). All 19 bases verified present on both Bybit
+linear and OKX SWAP (2026-08-19).
 
-## Data scope (v1) — all free, all snapshot
+OI and wall sizes are in the **base coin**, so the page formats units per symbol
+(thousands of BTC vs billions of DOGE).
 
-| Metric | Source | Notes |
-|--------|--------|-------|
-| Price + 1h/4h/24h change | Binance (Bybit fallback) | mark price |
-| Funding rate + next funding | exchange | annualized on the client |
-| Open interest + 1h/4h Δ | Binance `openInterestHist` | delta is Binance-only (deepest venue, good directional proxy) |
-| **Aggregated OI (BTC)** | Binance + Bybit + OKX summed | USDT-margined perps only; a dead venue just drops out |
-| Taker buy/sell, top-trader L/S | Binance `futures/data/*` | Binance-only; `null` on Bybit fallback → shown as `n/a` |
-| **Order-book walls** | OKX `books-full` (~5000 lvl), Bybit fallback | band+significance: nearest *significant* cluster (the gap) + heaviest (magnet) per side, `coveredPct`, imbalance |
+## Scoring — playbook §VII is the authority
 
-### Known limits / quirks (deliberate, don't "fix" without reason)
-- **Order book is shallow.** Even OKX `books-full` (~5000 levels) only spans
-  roughly ±0.5–1% around price. So walls = *immediate-book* liquidity, and a
-  side with no outlier bin is reported as "smooth" rather than inventing a
-  near-mid wall. `book.*.coveredPct` reports how far the snapshot actually
-  reached. Deeper walls (±2%+) need a WS-maintained book = persistent recorder
-  (out of scope). `computeWalls` drops the innermost bin (that's the spread) and
-  only calls a bin a wall if it's ≥3× the median depth AND ≥15% of side volume.
-- **Walls are spoofable.** Treat as "liquidity sitting here right now," one
-  confluence input — not a trigger.
-- **Liquidations / liquidation heatmaps are intentionally absent.** Binance's
-  free `forceOrder` stream is throttled/partial; aggregated liq + heatmaps
-  (Coinglass / mmt.gg) are paid-only with no free equivalent. Decided not worth
-  it for a confluence check.
-- **OI delta is Binance-only**, not aggregated (aggregating deltas needs history
-  from all venues). The aggregate OI *level* is summed; the *direction* comes
-  from Binance.
+Per-asset **−5..+5**, one point per layer. `≥ +3` CLEAR TO LONG · `≤ −3` CLEAR TO
+SHORT · `−2..+2` CHOPPY/RANGE.
 
-## Verdict thresholds (in `worker/src/index.js`, tune to taste)
-- price move significant: `|chg1h| > 0.15%`
-- OI move significant: `|oiD1h| > 0.25%`
-- funding: negative `<= -0.01%` (squeeze fuel) / elevated `>= 0.02%` (crowded longs)
-- taker: `< 0.9` sellers hitting / `> 1.1` buyers lifting
-- Core read = price direction × OI direction:
-  down+OI down = deleveraging (ok) · down+OI up = fresh shorts (risk) ·
-  up+OI up = fresh longs (ok) · up+OI down = short covering (mixed)
+| Layer | +1 | −1 | 0 |
+|---|---|---|---|
+| Spot ETF flow | `> +$50M` | `< −$50M` | flat / no data |
+| Funding | `< 0%` | `> +0.015%` | otherwise |
+| OI + price Δ (1h) | price ↑ + OI ↑ | price ↓ + OI ↓ | other |
+| EMA34 (4H) | body close above | body close below | oscillating |
+| Liquidity sweep | PDL swept + reclaimed | PDH swept + rejected | inside range |
 
-## Roadmap (not yet built)
-- TradingView alert webhook → Cloudflare Worker → Telegram push (reuse `verdict()`).
-- Optional: Deribit options skew/gamma as an extra free confluence layer.
+Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
+
+## Known limits and quirks (deliberate — don't "fix" without reason)
+
+- **The ETF layer is effectively manual.** Farside returns **HTTP 403 behind a
+  Cloudflare bot challenge**, so the scrape yields nothing and layer 1 sits at 0.
+  The header's `in/out/flat` toggle is the PRIMARY way this layer gets a value.
+  The choice is sent back as `?etf=` so scoring stays server-side.
+- **The OI layer only scores 2 of 4 quadrants**, exactly as §VII specifies.
+  Price-down + OI-up (*fresh shorts*) and price-up + OI-down (*short covering*)
+  render as badges but score `0` rather than inventing signs the playbook never
+  assigned.
+- **ETF flow is a BTC-macro layer proxied onto alts**, tagged `proxy` in the UI.
+  It never differentiates between assets. Inherent to the spec.
+- **PDH/PDL day boundary is UTC**, not WIB — 7h off from the owner's local day.
+- **The daily kline deliberately keeps its unclosed candle** (today's running
+  high/low *is* the sweep). Every other series drops it.
+- **EMA34 needs 200 bars.** The PRD said 50; that leaves only 16 bars past the
+  SMA seed and the layer flips on noise.
+- **FVG definitions in the PRD were inverted.** With oldest-first bars, bullish
+  is `high[i-2] < low[i]`. `worker/test/fvg.test.js` guards this permanently.
+- **Dominance (BTC.D / USDT.D / TOTAL3) is display-only** and must never enter
+  the score.
+- **Order book is shallow.** Even OKX `books-full` (~5000 levels) spans roughly
+  ±0.5–1%. Walls are *immediate-book* liquidity and are spoofable — one
+  confluence input, not a trigger. Deeper walls need a WS-maintained book.
+- **Liquidations / heatmaps are intentionally absent** — no free source worth it.
+- **Stale data greys the grid and shows a banner after 10 min.** Silently showing
+  old prices as live is the worst failure this tool can have.
+
+## Roadmap
+- Playbook §III 5-pillar gate (needs ≥4/5 to qualify). Pillars 1, 2 and 5 are
+  already derivable from `mode`, `equilibrium` and `sweep`; 3 and 4 need manual
+  checkboxes.
+- TradingView alert webhook → Worker → Telegram push (reuse `verdict.js`).
+- Optional: Deribit options skew/gamma as another free confluence layer.
