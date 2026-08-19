@@ -9,7 +9,7 @@
  */
 import { resolvePair } from './pairs.js';
 import { bybitCore, bybitDeep } from './sources/bybit.js';
-import { okxExtras } from './sources/okx.js';
+import { okxExtras, okxCore, okxOpenInterest } from './sources/okx.js';
 import { binanceExtras } from './sources/binance.js';
 import { fetchMacro } from './sources/macro.js';
 import { computeWalls } from './compute/walls.js';
@@ -44,13 +44,46 @@ export const UPSTREAM_HEADERS = {
   Accept: 'application/json, text/html;q=0.9, */*;q=0.8',
 };
 
-/** Fetcher with an edge cache TTL, injected into every source module. */
-const fetcher = (ttl) => async (url, { text = false } = {}) => {
-  const r = await fetch(url, {
+/**
+ * Fetcher with an edge cache TTL, injected into every source module.
+ *
+ * THE CACHE KEY IS BUCKETED PER TTL WINDOW (`_ttl=<window>`), and that is not
+ * cosmetic. Cloudflare's edge cache is keyed by URL and **shared across every
+ * Workers customer**. With `cacheEverything`, a 403 that Bybit's CloudFront
+ * returned to somebody else's Worker for a hot symbol gets stored under that
+ * URL and replayed to us indefinitely. That is exactly what broke ETH while
+ * BTC/SOL/SUI were fine: fetching the identical ETH URLs with no `cf` options
+ * returned 200 every time.
+ *
+ * Setting `cacheTtlByStatus: {'400-599': 0}` does NOT fix it — that governs
+ * what we WRITE to cache, not what we READ. Bucketing gives each TTL window its
+ * own key, so a poisoned entry can survive at most one window and we never read
+ * another customer's cached error.
+ *
+ * One retry on top: a 403/429 from a shared egress IP is transient, and a retry
+ * costs one subrequest against a 50 budget we barely touch.
+ */
+const fetcher = (ttl) => async (url, { text = false, retry = true } = {}) => {
+  const sep = url.includes('?') ? '&' : '?';
+  const target = `${url}${sep}_ttl=${Math.floor(Date.now() / (ttl * 1000))}`;
+  const opts = {
     headers: UPSTREAM_HEADERS,
     cf: { cacheTtl: ttl, cacheEverything: true },
-  });
-  if (!r.ok) throw new Error(`${url.replace(/\?.*/, '')} -> ${r.status}`);
+  };
+  let r = await fetch(target, opts);
+  // Bybit's CloudFront geo-blocks some Cloudflare edge egress intermittently.
+  // Two extra attempts convert most of those into a served row.
+  for (let i = 0; i < 2 && !r.ok && retry; i++) {
+    if (r.status !== 403 && r.status !== 429 && r.status < 500) break;
+    r = await fetch(target, opts);
+  }
+  if (!r.ok) {
+    // Include a snippet of the body: a bare status hides whether this is a rate
+    // limit, a WAF block, or an unsupported symbol.
+    let why = '';
+    try { why = ' ' + (await r.text()).replace(/\s+/g, ' ').slice(0, 180); } catch { /* consumed */ }
+    throw new Error(`${url.replace(/\?.*/, '')} -> ${r.status}${why}`);
+  }
   return text ? r.text() : r.json();
 };
 
@@ -59,12 +92,24 @@ async function attempt(fn) {
   catch (e) { return { ok: false, err: e.message }; }
 }
 
-/** Manual ETF override from the header toggle, when the feed is unreachable. */
-function manualEtf(flag) {
-  if (flag === 'in') return 60e6;
-  if (flag === 'out') return -60e6;
-  if (flag === 'flat') return 0;
-  return undefined;
+/**
+ * ETF net flow for score layer 1, supplied by the CALLER as `?etf=`.
+ *
+ * /asset deliberately does NOT fetch macro itself: eight concurrent asset
+ * requests all missing the macro cache at the same instant is a stampede, and
+ * it blew CoinPaprika's 60-requests-per-hour limit (402). The page fetches
+ * /macro once per refresh and relays the number here, so scoring still happens
+ * server-side in exactly one place.
+ *
+ * Accepts a raw USD number, or the header toggle's in/out/flat.
+ */
+function etfFromParam(raw) {
+  if (raw == null || raw === '') return undefined;
+  if (raw === 'in') return 60e6;
+  if (raw === 'out') return -60e6;
+  if (raw === 'flat') return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 async function handleAsset(url) {
@@ -75,27 +120,48 @@ async function handleAsset(url) {
   const showBins = url.searchParams.has('bins');
   const skip = Promise.resolve({ ok: false, err: 'skipped' });
 
-  const [core, macro, okx, bn, deepRes] = await Promise.all([
+  const [core, okx, bn, deepRes] = await Promise.all([
     attempt(() => bybitCore(sym, now, fetcher(30))),
-    attempt(() => fetchMacro(fetcher(900))),
     deep ? attempt(() => okxExtras(sym, fetcher(15))) : skip,
     deep ? attempt(() => binanceExtras(sym, fetcher(15))) : skip,
     deep ? attempt(() => bybitDeep(sym, fetcher(15))) : skip,
   ]);
 
-  if (!core.ok) {
-    return json({ symbol: sym.base, error: 'Core source (Bybit) unreachable', detail: core.err }, 502);
+  // Bybit is primary; OKX takes over when Bybit's CDN geo-blocks this edge.
+  let coreVal = core.ok ? core.val : null;
+  let coreErr = core.ok ? null : core.err;
+  let fellBack = false;
+  if (!coreVal) {
+    const alt = await attempt(() => okxCore(sym, now, fetcher(30)));
+    if (alt.ok) { coreVal = alt.val; fellBack = true; }
+    else {
+      return json({ symbol: sym.base, error: 'No core source reachable',
+                    detail: `bybit: ${coreErr} | okx: ${alt.err}` }, 502);
+    }
   }
 
-  const c = core.val;
-  const m = macro.ok ? macro.val : {};
+  const c = coreVal;
 
-  // §VII layer 1: BTC uses BTC flow, ETH uses ETH flow, everything else is
-  // proxied off BTC and tagged so the UI never presents it as asset-specific.
-  const override = manualEtf(url.searchParams.get('etf'));
-  const own = sym.base === 'BTC' ? m.etfBtc : sym.base === 'ETH' ? m.etfEth : null;
-  const etfProxy = sym.base !== 'BTC' && sym.base !== 'ETH';
-  const etfFlow = override !== undefined ? override : (etfProxy ? (m.etfBtc ?? null) : (own ?? null));
+  // Bybit's OI endpoint geo-fails often. Rather than lose score layer 3, patch
+  // it from OKX, which answers reliably from this edge.
+  let oiSource = fellBack ? 'OKX' : 'Bybit';
+  if (c.oiMissing) {
+    const oiAlt = await attempt(() => okxOpenInterest(sym, fetcher(30)));
+    if (oiAlt.ok && oiAlt.val) {
+      Object.assign(c, oiAlt.val);
+      c.oiUsd = c.oiCoin * c.mark;
+      oiSource = 'OKX (Bybit OI blocked)';
+    } else {
+      oiSource = 'unavailable';
+    }
+  }
+
+  // §VII layer 1. The supplied flow is BTC's, so it is asset-specific only for
+  // BTC and tagged `proxy` everywhere else. ETH has no free spot-ETF feed, so
+  // it is proxied too rather than misreporting BTC flow as ETH flow.
+  const supplied = etfFromParam(url.searchParams.get('etf'));
+  const etfFlow = supplied === undefined ? null : supplied;
+  const etfProxy = sym.base !== 'BTC';
 
   const ema = emaAlignment(c.bars4h, 34);
   const eq = equilibrium(c.bars4h, c.mark, 30);
@@ -114,7 +180,7 @@ async function handleAsset(url) {
     source: c.source,
     price: { mark: c.mark, chg1h: c.chg1h, chg24h: c.chg24h, chg4h: null },
     funding: { rate: c.funding, nextFundingTime: c.nextFundingTime },
-    oi: { coin: c.oiCoin, usd: c.oiUsd, d1h: c.oiD1h, d4h: c.oiD4h },
+    oi: { coin: c.oiCoin, usd: c.oiUsd, d1h: c.oiD1h, d4h: c.oiD4h, source: oiSource },
     signals: {
       ema: { value: ema.ema, side: ema.side },
       equilibrium: eq,
@@ -160,8 +226,10 @@ async function handleAsset(url) {
 
   if (debug) {
     payload.diag = {
-      bybit: 'ok',
-      macro: macro.ok ? 'ok' : macro.err,
+      bybit: core.ok ? 'ok' : coreErr,
+      coreUsed: fellBack ? 'OKX (Bybit failed)' : 'Bybit',
+      oiSource,
+      etf: supplied === undefined ? 'not supplied by caller' : String(supplied),
       okx: okx.ok ? 'ok' : okx.err,
       binance: bn.ok ? 'ok' : bn.err,
     };

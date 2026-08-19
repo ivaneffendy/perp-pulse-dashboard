@@ -16,7 +16,12 @@ export async function bybitCore(sym, now, j) {
     j(`${B}/v5/market/tickers?category=linear&symbol=${S}`),
     j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=240&limit=200`),
     j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=D&limit=2`),
-    j(`${B}/v5/market/open-interest?category=linear&symbol=${S}&intervalTime=1h&limit=5`),
+    // NON-FATAL. Bybit serves open-interest from a CloudFront distribution that
+    // geo-blocks this Cloudflare edge far more often than tickers/kline do, and
+    // one missing sub-signal must never blank the whole asset row. On failure
+    // score layer 3 simply reads 0 (flat OI) and everything else still renders.
+    j(`${B}/v5/market/open-interest?category=linear&symbol=${S}&intervalTime=1h&limit=5`)
+      .catch(() => null),
   ]);
 
   const t = tick.result.list[0];
@@ -29,7 +34,7 @@ export async function bybitCore(sym, now, j) {
   const today = days.at(-1) ?? null;
   const prevDay = days.length > 1 ? days.at(-2) : null;
 
-  const oiL = oiH.result.list ?? []; // newest first
+  const oiL = oiH?.result?.list ?? []; // newest first; empty when geo-blocked
   const oiNow = +oiL[0]?.openInterest;
   const oi1h = +oiL[1]?.openInterest;
   const oi4h = +oiL[4]?.openInterest;
@@ -45,6 +50,7 @@ export async function bybitCore(sym, now, j) {
     oiUsd: (Number.isFinite(oiNow) ? oiNow : 0) * mark,
     oiD1h: Number.isFinite(oi1h) && oi1h ? (oiNow / oi1h - 1) * 100 : 0,
     oiD4h: Number.isFinite(oi4h) && oi4h ? (oiNow / oi4h - 1) * 100 : 0,
+    oiMissing: oiL.length === 0,
     bars4h, prevDay, today,
   };
 }

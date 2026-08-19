@@ -21,6 +21,11 @@ const $ = (id) => document.getElementById(id);
 let lastGood = 0;
 let openSymbol = null;
 let timer = null;
+// Resolved ETF flow for score layer 1: the manual toggle if set, else whatever
+// /macro returned. Fetched ONCE per refresh and relayed to every /asset call —
+// eight assets each pulling macro themselves is a stampede that rate-limits the
+// upstream (CoinPaprika 402).
+let etfValue = null;
 
 const etf = initEtfToggle(() => load());
 
@@ -61,7 +66,7 @@ async function openDetail(symbol) {
   node.hidden = false;
   node.textContent = 'Loading…';
   try {
-    const d = await fetchAsset(symbol, { deep: true, etf: etf.get() });
+    const d = await fetchAsset(symbol, { deep: true, etf: etfValue });
     if (openSymbol !== symbol) return;
     renderDetail(node, d, closeDetail);
     // Non-blocking: enrich from the user's own network if it can reach Binance.
@@ -84,9 +89,14 @@ async function load() {
   const rows = new Map([...matrix.children].map((n) => [n.dataset.symbol, n]));
   let anyOk = false;
 
-  const macroPromise = fetchMacro().catch(() => null);
+  // Macro first, so its ETF number can be relayed to every asset request.
+  const macro = await fetchMacro().catch(() => null);
+  renderWeather(macro);
+  etf.refresh(macro);
+  const manual = etf.get();
+  etfValue = manual != null ? manual : (macro?.etfBtc ?? null);
 
-  await fetchMatrix(WATCHLIST, { etf: etf.get() }, (base, res) => {
+  await fetchMatrix(WATCHLIST, { etf: etfValue }, (base, res) => {
     if (res.ok) anyOk = true;
     const node = renderRow(base, res);
     if (base === openSymbol) node.classList.add('open');
@@ -96,10 +106,6 @@ async function load() {
     rows.set(base, node);
   });
   sortRows(matrix);
-
-  const macro = await macroPromise;
-  renderWeather(macro);
-  etf.refresh(macro);
 
   if (anyOk) {
     lastGood = Date.now();

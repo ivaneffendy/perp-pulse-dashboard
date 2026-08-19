@@ -57,7 +57,10 @@ export function parseFarsideTotal(html) {
     const raw = cells[cells.length - 1];
     const neg = /^\(.*\)$/.test(raw);
     const n = parseFloat(raw.replace(/[(),$]/g, ''));
-    if (!Number.isFinite(n)) return null;
+    // Today's row often exists before its figure is published ('-' or blank).
+    // Keep walking up to the last day that actually has a number, rather than
+    // reporting a placeholder as a real zero-flow day.
+    if (!Number.isFinite(n)) continue;
     return (neg ? -n : n) * 1e6; // $m -> $
   }
   return null;
