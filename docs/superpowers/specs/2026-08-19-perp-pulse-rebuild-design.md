@@ -71,7 +71,7 @@ auto-refresh over an 8-hour window ≈ **900/day**, against a 100k/day free limi
 
 | Endpoint | Upstream calls | Edge TTL | Returns |
 |---|---|---|---|
-| `GET /asset?symbol=X` | ~4 | 30s | price, funding, OI + Δ1h/Δ4h, EMA34 state, equilibrium, nearest unmitigated FVG, sweep state, market mode, §VII score + per-layer breakdown |
+| `GET /asset?symbol=X` | ~6 (4 Bybit + 2 macro) | 30s | price, funding, OI + Δ1h/Δ4h, EMA34 state, equilibrium, nearest unmitigated FVG, sweep state, market mode, §VII score + per-layer breakdown |
 | `GET /asset?symbol=X&deep=1` | ~14 | 15s | the above **plus** order-book walls, taker ratio, top-trader L/S, `verdict()` |
 | `GET /macro` | ~2 | 900s | ETF net flow (BTC, ETH), BTC.D, USDT.D, TOTAL3 |
 
@@ -122,7 +122,7 @@ does the most damage.
 
 | Field | Source | Notes |
 |---|---|---|
-| Price, 24h change, funding, next funding | Bybit `/v5/market/tickers` | core, reachable |
+| Price, **1h change**, 24h change, funding | Bybit `/v5/market/tickers` | `chg1h` from `prevPrice1h`, `chg24h` from `price24hPcnt` — no extra call. `chg4h` moved to the `deep=1` path. |
 | 4H klines (200 bars) | Bybit `/v5/market/kline?interval=240&limit=200` | **returns newest-first — must be reversed** |
 | 1D klines (2 bars) | Bybit `/v5/market/kline?interval=D&limit=2` | PDH/PDL |
 | OI + Δ1h/Δ4h | Bybit `/v5/market/open-interest?intervalTime=1h&limit=5` | |
@@ -403,16 +403,19 @@ from `worker/`.
 
 ## 14. Known risks
 
-1. **ETF flows have no reliable free CORS-friendly source.** Farside is HTML and
-   scraper-hostile. Layer 1 may sit at `0` or on manual override much of the time.
-   Accepted: it degrades safely and visibly.
+1. **CONFIRMED DEAD (2026-08-19): the ETF feed cannot be scraped.** Farside
+   returns **HTTP 403 behind a Cloudflare bot challenge** ("Just a moment..."),
+   so layer 1 sits at `0` unless set by hand. The manual `in/out/flat` toggle is
+   therefore the **primary** path, not a fallback — and in practice the score
+   operates on 4 of 5 layers, so `>= +3 CLEAR TO LONG` needs 3 of the remaining
+   4 to fire. The parser is kept and unit-tested in case a readable feed appears.
 2. **Watchlist vs. journal divergence.** NEAR, AVAX and ARB are in playbook §II
    but appear in zero of 28 logged trades; HYPE, WLD, RENDER, ZEC and ONDO are
    traded but not in §II. D3 resolves this operationally via an editable
    watchlist, but the playbook itself may deserve an update.
-3. **Venue coverage for the wider allowlist is unverified** — the dev sandbox has
-   no outbound network, so Bybit/OKX symbol availability for HYPE, WLD, RENDER,
-   ZEC, ONDO, ASTER and JTO must be confirmed during implementation before those
-   pairs are added.
+3. ~~Venue coverage unverified~~ — **RESOLVED 2026-08-19.** All 19 allowlisted
+   bases (including HYPE, WLD, RENDER, ZEC, ONDO, ASTER, JTO) confirmed present
+   on both Bybit linear (829 symbols) and OKX SWAP (452 instruments). Nothing
+   needed removing.
 4. **§VII's ETF layer is macro-wide**, so it applies an identical ±1 to every
    asset and never differentiates between them. Inherent to the spec, not a bug.
