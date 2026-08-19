@@ -32,9 +32,24 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS },
 });
 
+/**
+ * Cloudflare Workers send NO User-Agent by default, and CoinGecko hard-rejects
+ * that with 403 "Please add a descriptive User-Agent to your request." The
+ * failure was invisible because fetchMacro catches everything into nulls, so
+ * the weather widget silently rendered em-dashes in production. Send a real UA
+ * to every upstream.
+ */
+export const UPSTREAM_HEADERS = {
+  'User-Agent': 'perp-pulse-dashboard (+https://github.com/ivaneffendy/perp-pulse-dashboard)',
+  Accept: 'application/json, text/html;q=0.9, */*;q=0.8',
+};
+
 /** Fetcher with an edge cache TTL, injected into every source module. */
 const fetcher = (ttl) => async (url, { text = false } = {}) => {
-  const r = await fetch(url, { cf: { cacheTtl: ttl, cacheEverything: true } });
+  const r = await fetch(url, {
+    headers: UPSTREAM_HEADERS,
+    cf: { cacheTtl: ttl, cacheEverything: true },
+  });
   if (!r.ok) throw new Error(`${url.replace(/\?.*/, '')} -> ${r.status}`);
   return text ? r.text() : r.json();
 };
