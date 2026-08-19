@@ -8,11 +8,22 @@ import { enrichBinance } from './binance-enrich.js';
 const DEFAULT_WATCHLIST = ['BTC', 'ETH', 'SOL', 'NEAR', 'SUI', 'AVAX', 'LINK', 'ARB'];
 const REFRESH_MS = 5 * 60 * 1000;
 const STALE_MS = 10 * 60 * 1000;
+// Returning to the tab must NOT trigger a full fetch every time. Each refresh
+// is 8 asset requests = ~32 upstream exchange calls, so switching back and
+// forth while reading was a burst generator — and bursts are exactly what trips
+// Bybit's geo-block and OKX's rate limit. Only refetch if data is older than
+// this; otherwise what is already on screen is perfectly current.
+const MIN_REFETCH_MS = 60 * 1000;
 
 const params = new URLSearchParams(location.search);
 if (params.get('watchlist')) {
   localStorage.setItem('ppd_watchlist', params.get('watchlist').toUpperCase());
 }
+// Auto-refresh can be turned off entirely with ?auto=off (persisted). Manual
+// mode still refreshes when you press the button, and still warns when stale.
+if (params.get('auto')) localStorage.setItem('ppd_auto', params.get('auto').toLowerCase());
+const AUTO = (localStorage.getItem('ppd_auto') || 'on') !== 'off';
+
 const saved = (localStorage.getItem('ppd_watchlist') || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
 const WATCHLIST = saved.length ? saved : DEFAULT_WATCHLIST;
@@ -114,7 +125,8 @@ async function load() {
   if (anyOk) {
     lastGood = Date.now();
     $('ts').textContent = new Date().toLocaleTimeString();
-    $('src').textContent = `${WATCHLIST.length} assets · Bybit core`;
+    $('src').textContent =
+      `${WATCHLIST.length} assets · ${AUTO ? 'auto 5m' : 'manual only'}`;
   } else {
     showError('Could not reach the data proxy. Set it once with ?api=<worker-url>.');
   }
@@ -128,13 +140,15 @@ function schedule() {
   clearInterval(timer);
   // §II says the charts are closed most of the day — a hidden tab should not
   // burn request quota or phone battery.
-  if (document.hidden) return;
+  if (!AUTO || document.hidden) return;
   timer = setInterval(load, REFRESH_MS);
 }
 
 document.addEventListener('visibilitychange', () => {
   schedule();
-  if (!document.hidden) load();
+  if (document.hidden) return;
+  // Refetch on return ONLY if what is on screen has actually gone stale.
+  if (Date.now() - lastGood > MIN_REFETCH_MS) load();
 });
 $('refresh').addEventListener('click', () => load());
 setInterval(checkStale, 30_000);

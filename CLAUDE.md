@@ -160,6 +160,19 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **Liquidations / heatmaps are intentionally absent** — no free source worth it.
 - **Stale data greys the grid and shows a banner after 10 min.** Silently showing
   old prices as live is the worst failure this tool can have.
+- **Refresh budget.** One refresh = 1 macro + N asset requests (~32 upstream
+  exchange calls at N=8). Auto-refresh at 5 min over an 8h day is ~860 Worker
+  requests — under 1% of the 100k/day free limit, so Cloudflare is never the
+  binding constraint; the exchanges are. Returning to the tab therefore refetches
+  **only if data is older than `MIN_REFETCH_MS` (60s)** — an unguarded
+  `visibilitychange` reload turned ordinary tab-switching into a burst generator,
+  which is precisely what trips Bybit's geo-block and OKX's rate limit.
+  `?auto=off` (persisted as `ppd_auto`) disables the timer entirely; the refresh
+  button and the staleness banner both still work.
+- **Client concurrency is capped at 3** (`POOL` in `src/api.js`). Firing all 8 at
+  once made ~3 fail together, because the burst tripped OKX's limit at the same
+  moment Bybit's CDN geo-blocked — removing the fallback for exactly the rows
+  that needed it.
 
 ## Docs
 `docs/reading-the-dashboard.html` is the **reader's guide** — a plain-language
