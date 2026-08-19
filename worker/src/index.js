@@ -63,9 +63,13 @@ export const UPSTREAM_HEADERS = {
  * One retry on top: a 403/429 from a shared egress IP is transient, and a retry
  * costs one subrequest against a 50 budget we barely touch.
  */
-const fetcher = (ttl) => async (url, { text = false, retry = true } = {}) => {
+const fetcher = (ttl) => async (url, { text = false, retry = true, bucket = true } = {}) => {
+  // bucket:false for plain HTML pages (Farside): they are not APIs, so we do
+  // not append query params they never expect. (Note: this was NOT the cause of
+  // etfBtc reading 0 — that is Farside genuinely publishing 0.0 for the current
+  // UTC day before the figure lands. 0 scores neutral, so it degrades safely.)
   const sep = url.includes('?') ? '&' : '?';
-  const target = `${url}${sep}_ttl=${Math.floor(Date.now() / (ttl * 1000))}`;
+  const target = bucket ? `${url}${sep}_ttl=${Math.floor(Date.now() / (ttl * 1000))}` : url;
   const opts = {
     headers: UPSTREAM_HEADERS,
     cf: { cacheTtl: ttl, cacheEverything: true },

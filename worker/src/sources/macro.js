@@ -72,7 +72,7 @@ export async function fetchMacro(j) {
   // Reasons are surfaced on /macro?debug=1.
   const settled = await Promise.allSettled([
     Promise.all([j(CP_GLOBAL), j(CP_TICKERS)]).then(([g, t]) => parseDominance(g, t)),
-    j(FARSIDE, { text: true }).then(parseFarsideTotal),
+    j(FARSIDE, { text: true, bucket: false }).then(parseFarsideTotal),
   ]);
   const val = (r) => (r.status === 'fulfilled' ? r.value : null);
   const why = (r, v) => r.status === 'rejected'
