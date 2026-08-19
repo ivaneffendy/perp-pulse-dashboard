@@ -5,9 +5,14 @@
  * Dominance MUST NOT enter the score — the PRD is explicit about this and the
  * §VII table has no dominance row.
  *
- * ETF flow is the flakiest input in the whole system: Farside is HTML, has no
- * CORS headers and is scraper-hostile. Everything here returns null rather than
- * throwing, and score.js treats null as a neutral 0.
+ * ETF flow is the flakiest input in the whole system. CONFIRMED 2026-08-19:
+ * Farside returns HTTP 403 behind a Cloudflare bot challenge ("Just a
+ * moment..."), so the scrape yields nothing and layer 1 sits at 0. The parser
+ * is kept and unit-tested so that if a readable feed ever appears the wiring
+ * is already correct — but in practice the header's manual in/out/flat toggle
+ * is the PRIMARY way this layer gets a value, not a fallback.
+ *
+ * Everything here returns null rather than throwing; score.js treats null as 0.
  */
 
 const CG = 'https://api.coingecko.com/api/v3/global';

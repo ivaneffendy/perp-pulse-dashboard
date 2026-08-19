@@ -7,9 +7,9 @@
  * because the trade journal shows real rotation (HYPE, WLD, RENDER, ZEC, ONDO)
  * that would otherwise need a redeploy to follow.
  *
- * UNVERIFIED: venue coverage for HYPE, WLD, RENDER, ZEC, ONDO, ASTER and JTO
- * has not been confirmed against Bybit/OKX. Check before relying on them; a
- * missing OKX instrument degrades to Bybit-only rather than failing.
+ * Venue coverage verified 2026-08-19: every base below exists on BOTH Bybit
+ * linear (829 symbols) and OKX SWAP (452 instruments). A future listing that
+ * OKX lacks degrades to Bybit-only rather than failing the row.
  */
 const mk = (base) => ({
   bybit: `${base}USDT`,
