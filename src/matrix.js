@@ -1,4 +1,4 @@
-import { fmtPct, fmtPrice, fmtScore, signClass } from './format.js';
+import { fmtPct, fmtPrice, fmtScore, signClass, zoneConflict } from './format.js';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -43,12 +43,22 @@ export function renderRow(base, result) {
   row.classList.add(s.cls);
   row.dataset.score = String(Math.abs(s.total));
 
+  const eq = d.signals.equilibrium;
+  const conflict = zoneConflict(s.cls, eq);
+
   const top = el('div', 'row-top');
   top.append(
     el('span', 'tkr', base),
     el('span', 'score ' + signClass(s.total), fmtScore(s.total)),
     el('span', 'vd', s.verdict),
   );
+  if (conflict) {
+    const w = el('span', 'zone-warn', `⚠ ${conflict}`);
+    w.title = conflict === 'premium'
+      ? 'CLEAR TO LONG, but price is in Premium (§III pillar 2 wants Discount for longs)'
+      : 'CLEAR TO SHORT, but price is in Discount (§III pillar 2 wants Premium for shorts)';
+    top.append(w);
+  }
   const px = el('span', 'px');
   px.append(
     document.createTextNode(fmtPrice(d.price.mark) + ' '),
@@ -56,7 +66,6 @@ export function renderRow(base, result) {
   );
   top.append(px);
 
-  const eq = d.signals.equilibrium;
   const mid = el('div', 'row-mid');
   mid.append(
     el('span', null, eq ? `${eq.zone} · ${fmtPct(eq.pctToLow)} above 4H low` : 'no range data'),

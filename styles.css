@@ -54,6 +54,13 @@ h1 span{color:var(--steel)}
 .badge.hot{border-color:var(--warn);color:var(--warn)}
 .pos{color:var(--up)} .neg{color:var(--down)} .flat{color:var(--muted)}
 
+/* Score/equilibrium conflict — score.js and equilibrium.js are never summed,
+   so this is a pure display-layer flag when a CLEAR TO LONG/SHORT verdict
+   lands on the wrong side of the 4H range (§III pillar 2). */
+.zone-warn{font-size:10px;font-weight:600;padding:2px 7px;border-radius:999px;
+  border:1px solid var(--warn);color:var(--warn);background:rgba(245,166,35,.12);
+  white-space:nowrap}
+
 /* Score chips — a total is never shown without its five layers. */
 .chips{display:flex;gap:5px;flex-wrap:wrap;margin:10px 0 0}
 .chip{font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);

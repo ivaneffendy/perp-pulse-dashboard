@@ -21,6 +21,19 @@ export const fmtUsd = (v) =>
 export const fmtScore = (n) => (n > 0 ? '+' : '') + n;
 export const signClass = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : 'flat');
 
+/**
+ * §III pillar 2: longs only valid in Discount, shorts only in Premium.
+ * score.js and equilibrium.js are deliberately never summed (same split as
+ * score.js vs verdict.js) — this only flags when the two disagree so a
+ * CLEAR TO LONG can't render silently on top of a Premium entry.
+ */
+export const zoneConflict = (cls, eq) => {
+  if (!eq) return null;
+  if (cls === 'long' && eq.zone === 'PREMIUM') return 'premium';
+  if (cls === 'short' && eq.zone === 'DISCOUNT') return 'discount';
+  return null;
+};
+
 export function countdown(ts) {
   const s = Math.max(0, ts - Date.now());
   const h = Math.floor(s / 3.6e6), m = Math.floor((s % 3.6e6) / 6e4);

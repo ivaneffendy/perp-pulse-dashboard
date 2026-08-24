@@ -1,4 +1,4 @@
-import { fmtPct, fmtPrice, fmtCoin, fmtUsd, countdown } from './format.js';
+import { fmtPct, fmtPrice, fmtCoin, fmtUsd, countdown, zoneConflict } from './format.js';
 import { scoreChips } from './matrix.js';
 
 const el = (tag, cls, text) => {
@@ -28,6 +28,18 @@ export function renderDetail(node, d, onClose) {
   const bias = el('div', 'block');
   bias.append(el('div', 'label',
     `Bias (§VII) — ${d.score.verdict} ${d.score.total >= 0 ? '+' : ''}${d.score.total}`));
+  const eq = d.signals?.equilibrium;
+  if (eq) {
+    bias.append(el('p', null, `${eq.zone} · ${eq.pctOfRange.toFixed(0)}% of range`));
+  }
+  const conflict = zoneConflict(d.score.cls, eq);
+  if (conflict) {
+    const w = el('span', 'zone-warn', `⚠ ${conflict}`);
+    w.title = conflict === 'premium'
+      ? 'CLEAR TO LONG, but price is in Premium (§III pillar 2 wants Discount for longs)'
+      : 'CLEAR TO SHORT, but price is in Discount (§III pillar 2 wants Premium for shorts)';
+    bias.append(w);
+  }
   bias.append(scoreChips(d.score.layers));
   node.append(bias);
 
