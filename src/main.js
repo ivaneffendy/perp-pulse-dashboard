@@ -22,7 +22,7 @@ if (params.get('watchlist')) {
 // Auto-refresh can be turned off entirely with ?auto=off (persisted). Manual
 // mode still refreshes when you press the button, and still warns when stale.
 if (params.get('auto')) localStorage.setItem('ppd_auto', params.get('auto').toLowerCase());
-const AUTO = (localStorage.getItem('ppd_auto') || 'on') !== 'off';
+const AUTO = (localStorage.getItem('ppd_auto') || 'off') !== 'off';
 
 const saved = (localStorage.getItem('ppd_watchlist') || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
@@ -146,12 +146,17 @@ function schedule() {
 
 document.addEventListener('visibilitychange', () => {
   schedule();
-  if (document.hidden) return;
+  // In manual mode (the default), returning to the tab must never trigger a
+  // fetch on its own — only the Refresh button may.
+  if (document.hidden || !AUTO) return;
   // Refetch on return ONLY if what is on screen has actually gone stale.
   if (Date.now() - lastGood > MIN_REFETCH_MS) load();
 });
 $('refresh').addEventListener('click', () => load());
 setInterval(checkStale, 30_000);
 
-load();
+// Manual mode is the default: the very first fetch, like every fetch after
+// it, must come from the user pressing Refresh — not from script boot.
+if (AUTO) load();
+else $('src').textContent = 'Press Refresh to load data';
 schedule();
