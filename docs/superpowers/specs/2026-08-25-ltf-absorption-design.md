@@ -122,6 +122,18 @@ explicitly, or the feature reads "quiet" at exactly the wrong moment:
    bars covers ~45 minutes, matching the alert-response window, and degrades
    gracefully when the newest bar is too young to read.
 
+### The baseline excludes the bar being judged
+
+For a bar at index `i`, the trailing average is taken over bars
+`[i - lookback, i - 1]` — strictly *before* it, never including it. A spike
+folded into its own baseline dilutes itself: the more violent the bar, the more
+it raises the mean it is measured against, and the tamer it reads. Since only
+the last bar can be forming and every baseline window ends before its own bar,
+the partial forming volume can never contaminate a baseline either.
+
+Each of the `evalBars` candidates therefore gets its own baseline window rather
+than sharing one.
+
 ### Per-bar geometry
 
 ```
@@ -217,7 +229,9 @@ Consistent with the codebase rule that upstream failures are never swallowed:
 - Both venues unreachable → HTTP 502 with a `detail` naming both errors, and the
   panel shows the reason rather than an empty block.
 - Fewer than `lookback + 1` bars returned (a thin or newly listed market) →
-  `cls: "nodata"` with an explicit message. Never a fabricated RVOL.
+  `cls: "nodata"` with an explicit message. Never a fabricated RVOL. Between
+  `lookback + 1` and `lookback + evalBars` bars, only the candidates that have a
+  complete baseline window are evaluated, rather than failing outright.
 - Trailing average volume of zero → `nodata`, not a division by zero.
 
 ## Testing

@@ -364,6 +364,8 @@
         <tr><td class="num" style="color:var(--accent)">proxy</td><td>On the ETF chip: this is Bitcoin's ETF figure applied to another coin, because only Bitcoin has spot ETFs. It is background weather, not that coin's own data</td></tr>
         <tr><td class="num">via OKX</td><td>This row's numbers came from the backup exchange because the usual one could not be reached. The two exchanges disagree slightly on price, funding and open interest, so the reading is sound but not identical to the others. A row without this tag came from the usual source</td></tr>
         <tr><td class="num">OI n/a</td><td>Neither exchange returned open interest, so one of the five checks had nothing to read</td></tr>
+        <tr><td class="num" style="color:var(--up)">Absorbed at the low / high</td><td>On the 15-minute chart, a burst of unusually heavy trading was met by a long rejection wick &#8212; buyers (or sellers) pushed, and someone sat there taking the other side. The level held. This is the healthy case</td></tr>
+        <tr><td class="num" style="color:var(--down)">Initiative &#8212; not a sweep</td><td>Heavy trading, but the candle is a big solid body with no rejection: the level is being taken, not defended. The opposite of the above, and a reason to stand aside rather than buy the dip</td></tr>
       </tbody>
     </table>
   </div>
@@ -377,6 +379,9 @@
   <p>Three things are worth checking before relying on anything shown.</p>
   <h3>An amber banner across the top</h3>
   <p>Data is more than 10 minutes old and the grid dims &#8212; either a refresh failed, or none has been asked for. <strong>The page never fetches on its own: it loads empty and waits for the refresh button.</strong> Nothing is live until you press it. <strong>Do not read prices off a dimmed screen</strong> &#8212; this warning exists specifically because showing stale prices as if live is the worst thing this tool could do.</p>
+  <h3>A <code>Check 15m trigger</code> result more than two minutes old</h3>
+  <p>That block fades once it ages, on purpose. It answers "is this level holding <em>right now</em>", and a two-minute-old answer to a question about right now is not an answer. Press the button again rather than reading the faded one. It is also the only thing on the page that never loads by itself &#8212; it costs a live exchange call each press, and its whole value is being current.</p>
+  <p>Note what it does <strong>not</strong> tell you: absorption is one of four confirmations the playbook asks for at an entry. The other three &#8212; the change of character, the displacement gap, and the level itself &#8212; are still yours to check on the chart. A green reading here is permission to keep looking, not permission to enter.</p>
   <h3>An amber <code>&#9888; premium</code> or <code>&#9888; discount</code> pill beside the verdict</h3>
   <p>The verdict and the entry price disagree. A <em>clear to long</em> reading with <code>&#9888; premium</code> means the direction looks right but price is already in the expensive half of its range &#8212; the move may be well underway. This is deliberately <strong>not</strong> subtracted from the score: the score answers "which way", this pill answers "is here a sensible place to act".</p>
   <h3>A row showing an error instead of numbers</h3>

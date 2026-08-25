@@ -31,6 +31,13 @@ export const fetchAsset = (base, { deep = false, etf = null } = {}) =>
 export const fetchMacro = () => get('/macro', {});
 
 /**
+ * §IV Step 2, on demand only. Never called on a timer or on panel open — a 15m
+ * absorption read is only meaningful in the minutes around the POI tap, so a
+ * stale one is worse than none.
+ */
+export const fetchLtf = (base) => get('/ltf', { symbol: base });
+
+/**
  * Fan out one request per asset. Deliberately NOT a single /matrix call: a
  * Worker invocation is capped at 50 subrequests, and one slow venue must not
  * blank the whole grid. Each row paints as it settles.

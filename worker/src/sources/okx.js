@@ -1,5 +1,6 @@
 import { computeWalls } from '../compute/walls.js';
-import { normalizeKlines, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
+import { normalizeKlines, INTERVAL_15M, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
+import { LTF_BARS } from './bybit.js';
 
 const O = 'https://www.okx.com';
 
@@ -15,6 +16,20 @@ const O = 'https://www.okx.com';
  * OKX candle rows are [ts, o, h, l, c, vol, ...] — the same field order as
  * Bybit, so normalizeKlines consumes them unchanged.
  */
+/**
+ * /ltf fallback. Required, not optional: Bybit's CDN geo-blocks this edge
+ * intermittently, so a route with no fallback would fail exactly when the rest
+ * of the dashboard is already degraded. Same row order, so normalizeKlines
+ * consumes it unchanged.
+ */
+export async function okxLtf(sym, now, j) {
+  const k = await j(
+    `${O}/api/v5/market/candles?instId=${sym.okxInst}&bar=15m&limit=${LTF_BARS}`);
+  const bars = normalizeKlines(k.data, INTERVAL_15M, now, false);
+  if (!bars.length) throw new Error(`OKX has no 15m candles for ${sym.okxInst}`);
+  return { source: 'OKX SWAP', bars };
+}
+
 export async function okxCore(sym, now, j) {
   const inst = sym.okxInst, ccy = sym.okxCcy;
   const [k1h, k4h, kd, fund, oiHist, oiNow] = await Promise.all([

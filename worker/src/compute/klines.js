@@ -7,6 +7,7 @@
  * is wrong every derived signal is silently wrong with it.
  */
 
+export const INTERVAL_15M = 15 * 60 * 1000;
 export const INTERVAL_4H = 4 * 60 * 60 * 1000;
 export const INTERVAL_1D = 24 * 60 * 60 * 1000;
 

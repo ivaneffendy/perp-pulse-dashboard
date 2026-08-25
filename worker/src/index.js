@@ -8,8 +8,10 @@
  * happens here instead, and this returns permissive CORS.
  */
 import { resolvePair } from './pairs.js';
-import { bybitCore, bybitDeep } from './sources/bybit.js';
-import { okxExtras, okxCore, okxOpenInterest } from './sources/okx.js';
+import { bybitCore, bybitDeep, bybitLtf } from './sources/bybit.js';
+import { okxExtras, okxCore, okxOpenInterest, okxLtf } from './sources/okx.js';
+import { absorption } from './compute/absorption.js';
+import { INTERVAL_15M } from './compute/klines.js';
 import { binanceExtras } from './sources/binance.js';
 import { fetchMacro } from './sources/macro.js';
 import { computeWalls } from './compute/walls.js';
@@ -255,11 +257,46 @@ async function handleMacro(url) {
     : { ts: Date.now(), ...rest });
 }
 
+/**
+ * Playbook §IV Step 2 — on demand only, never on a timer.
+ *
+ * A 15m absorption read is meaningful only in the minutes around the POI tap,
+ * so joining the refresh loop would routinely serve a verdict computed BEFORE
+ * the alert fired — worse than showing nothing, because it invites acting on a
+ * stale read of the one thing that is supposed to be live.
+ *
+ * Deliberately NOT part of /asset: that path always fetches core first, so a
+ * `?ltf=1` param would pay four upstream calls to obtain the one that matters.
+ * Here a button press costs exactly one.
+ */
+export async function handleLtf(url) {
+  const now = Date.now();
+  const sym = resolvePair(url.searchParams.get('symbol') || 'BTC');
+
+  let res = await attempt(() => bybitLtf(sym, now, fetcher(15)));
+  let bybitErr = null;
+  if (!res.ok) {
+    bybitErr = res.err;
+    res = await attempt(() => okxLtf(sym, now, fetcher(15)));
+    if (!res.ok) {
+      return json({
+        symbol: sym.base, error: 'No venue could serve 15m candles',
+        detail: `bybit: ${bybitErr} | okx: ${res.err}`,
+      }, 502);
+    }
+  }
+
+  const { source, bars } = res.val;
+  const read = absorption(bars, { now, intervalMs: INTERVAL_15M });
+  return json({ ts: now, symbol: sym.base, source, interval: '15m', ...read });
+}
+
 export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(request.url);
     if (url.pathname === '/macro') return handleMacro(url);
+    if (url.pathname === '/ltf') return handleLtf(url);
     return handleAsset(url);
   },
 };

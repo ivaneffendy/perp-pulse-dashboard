@@ -21,8 +21,10 @@ Phone browser (GitHub Pages, static, no build step)
   ├─ GET /asset?symbol=BTC   ─▶ Worker ─▶ Bybit  (4 calls) + macro (2, cached)
   ├─ GET /asset?symbol=ETH   ─▶ Worker      … one request per watchlist asset,
   │  … fanned out in parallel                  fired concurrently
-  └─ GET /asset?symbol=X&deep=1 ─▶ Worker ─▶ + OKX + Binance + Bybit book (~14)
-       └─ Binance fapi DIRECT from the device (hybrid client-side enrichment)
+  ├─ GET /asset?symbol=X&deep=1 ─▶ Worker ─▶ + OKX + Binance + Bybit book (~14)
+  │    └─ Binance fapi DIRECT from the device (hybrid client-side enrichment)
+  └─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
+       └─ ON DEMAND ONLY — a button press, never the refresh loop
 ```
 
 ### Why fan out instead of one `/matrix` call
@@ -60,9 +62,11 @@ worker/src/
   pairs.js          allowlist + per-venue symbol mapping
   sources/          bybit · okx · binance · macro   (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
-  score.js          §VII bias engine        ─┐ both exported,
-  verdict.js        Phase 2 pullback health ─┘ NEVER summed
-worker/test/        node --test suites (63 tests)
+                    · absorption  (§IV Step 2, /ltf only)
+  score.js          §VII bias engine        ─┐ three separate questions,
+  verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
+  compute/absorption.js  §IV Step 2 LTF read ─┘
+worker/test/        node --test suites (88 tests)
 ```
 
 Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
@@ -146,8 +150,21 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **ETF flow is a BTC-macro layer proxied onto alts**, tagged `proxy` in the UI.
   It never differentiates between assets. Inherent to the spec.
 - **PDH/PDL day boundary is UTC**, not WIB — 7h off from the owner's local day.
-- **The daily kline deliberately keeps its unclosed candle** (today's running
-  high/low *is* the sweep). Every other series drops it.
+- **Two series deliberately keep their unclosed candle** — the daily (today's
+  running high/low *is* the sweep) and the 15m LTF read (the tap being judged is
+  happening right now). Every other series drops it. Keeping it forces the
+  forming-bar correction below.
+- **The 15m absorption read pro-rates the forming bar's volume.** A bar three
+  minutes into its fifteen holds ~20% of a normal bar, so a raw RVOL reads
+  "quiet" at exactly the moment the button was pressed. `absorption()` divides
+  by the elapsed fraction, floored at `minElapsed` so a seconds-old bar cannot
+  produce an infinite ratio. Its trailing baseline also **excludes the bar being
+  judged** — a spike folded into its own average dilutes itself.
+- **`/ltf` is on-demand and must stay that way.** Not on the refresh loop, not
+  on detail-panel open. A 15m absorption read is only meaningful in the minutes
+  around the POI tap, so a stale one is worse than none — it invites acting on a
+  dead read of the one thing that is supposed to be live. The page greys the
+  block after 2 minutes for the same reason.
 - **EMA34 needs 200 bars.** The PRD said 50; that leaves only 16 bars past the
   SMA seed and the layer flips on noise.
 - **FVG definitions in the PRD were inverted.** With oldest-first bars, bullish

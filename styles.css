@@ -84,6 +84,23 @@ h1 span{color:var(--steel)}
 .block.health.ok{border-left:3px solid var(--up);padding-left:10px}
 .block.health.risk{border-left:3px solid var(--down);padding-left:10px}
 .block.health.mixed{border-left:3px solid var(--warn);padding-left:10px}
+
+/* LTF trigger (§IV Step 2) — a third question, kept visually distinct from the
+   health block above it so the two are never read as one verdict. */
+.ltf-btn{margin-bottom:8px}
+.ltf-out:empty{display:none}
+.ltf-out{border-left:3px solid var(--border);padding-left:10px}
+.ltf-out.absorbed{border-left-color:var(--up)}
+.ltf-out.initiative{border-left-color:var(--down)}
+.ltf-out.quiet,.ltf-out.nodata{border-left-color:var(--muted)}
+.ltf-out.err{border-left-color:var(--warn);color:var(--warn);font-size:13px}
+.ltf-head{font-size:12px;font-weight:600;letter-spacing:.04em;margin-bottom:4px}
+.ltf-out.absorbed .ltf-head{color:var(--up)}
+.ltf-out.initiative .ltf-head{color:var(--down)}
+.ltf-meta{font-size:10px;color:var(--muted);margin-top:6px;
+  font-variant-numeric:tabular-nums}
+/* Freshness is the whole point of the button, so an aged read must look aged. */
+.ltf-stale{opacity:.45}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 .stat{border:1px solid var(--border);border-radius:8px;padding:9px}
 .stat .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}

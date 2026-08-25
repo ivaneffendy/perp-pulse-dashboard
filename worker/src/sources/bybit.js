@@ -1,4 +1,7 @@
-import { normalizeKlines, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
+import { normalizeKlines, INTERVAL_15M, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
+
+/** lookback(20) + evalBars(3) + headroom, in one call. */
+export const LTF_BARS = 40;
 
 const B = 'https://api.bybit.com';
 
@@ -53,6 +56,21 @@ export async function bybitCore(sym, now, j) {
     oiMissing: oiL.length === 0,
     bars4h, prevDay, today,
   };
+}
+
+/**
+ * /ltf only — ONE call, because the whole point of the route is that pressing
+ * the button costs a single upstream request.
+ *
+ * The forming candle is KEPT (dropUnclosed = false), like the daily sweep bar
+ * and unlike every other series: the tap being judged is happening right now.
+ */
+export async function bybitLtf(sym, now, j) {
+  const k = await j(
+    `${B}/v5/market/kline?category=linear&symbol=${sym.bybit}&interval=15&limit=${LTF_BARS}`);
+  const bars = normalizeKlines(k.result.list, INTERVAL_15M, now, false);
+  if (!bars.length) throw new Error(`Bybit has no 15m klines for ${sym.bybit}`);
+  return { source: 'Bybit linear', bars };
 }
 
 /** deep=1 only: book walls, account L/S, and the 4h change for display. */
