@@ -1,0 +1,48 @@
+docs/superpowers/specs/2026-08-25-ltf-absorption-design.md
+  43718e6878c17a05 125-136,232-234
+worker/test/ltf-route.test.js
+  43718e6878c17a05 1-100
+docs/reading-the-dashboard.html
+  43718e6878c17a05 367-368,382-384
+worker/test/absorption.test.js
+  43718e6878c17a05 1-171
+worker/src/compute/absorption.js
+  43718e6878c17a05 1-139
+worker/src/sources/bybit.js
+  43718e6878c17a05 1-4,61-75
+worker/src/sources/okx.js
+  43718e6878c17a05 2-3,19-32
+src/api.js
+  43718e6878c17a05 34-39
+src/detail.js
+  43718e6878c17a05 3-8,29-86,124-127
+worker/src/index.js
+  43718e6878c17a05 11-14,260-293,299
+worker/src/compute/klines.js
+  43718e6878c17a05 10
+styles.css
+  43718e6878c17a05 87-103
+CLAUDE.md
+  43718e6878c17a05 24-27,65-69,153-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "a4d0e94ee4cc59a25e3e69f0cf3f030c6dcea7ff",
+  "prompts": {
+    "43718e6878c17a05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "777d5adb-9d2f-440d-b3d2-f231238e3a17",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 626,
+      "total_deletions": 17,
+      "accepted_lines": 621,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/524365898fb7305dda00ba41f21502a623f6be1a298e0145b7374df04317038e"
+    }
+  }
+}
