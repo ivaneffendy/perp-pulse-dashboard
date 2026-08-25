@@ -223,6 +223,15 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   that needed it.
 
 ## Docs
+The **authoritative trading playbook** — the SMC/derivatives method this
+dashboard exists to serve — lives in the private sibling repo
+`../trading-vault/playbook.md` (github.com/ivaneffendy/trading-vault, private).
+It is not committed here: it contains personal risk/journal detail that has no
+reason to be public, unlike this repo. Where it and any PRD, spec or
+implementation disagree, the playbook wins. It's edited primarily in claude.ai
+chat and synced back to that repo periodically — if the sibling repo isn't
+cloned locally, ask before assuming any playbook detail.
+
 `docs/reading-the-dashboard.html` is the **reader's guide** — a plain-language
 explanation of every number on screen, written for someone who had no part in
 building this. Keep it in sync when a badge, chip or score layer changes; it is
