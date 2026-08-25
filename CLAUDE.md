@@ -48,7 +48,7 @@ degrade silently to the Bybit/OKX baseline.
 index.html          markup shell only
 styles.css
 src/
-  main.js           boot, 5-min refresh, visibility pause, staleness, watchlist
+  main.js           boot, manual refresh (opt-in timer), staleness, watchlist
   api.js            Worker client: fan-out, 8s timeout, per-asset failure
   matrix.js         Phase 1 grid + score chips
   detail.js         Phase 2 panel
@@ -160,15 +160,20 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **Liquidations / heatmaps are intentionally absent** — no free source worth it.
 - **Stale data greys the grid and shows a banner after 10 min.** Silently showing
   old prices as live is the worst failure this tool can have.
-- **Refresh budget.** One refresh = 1 macro + N asset requests (~32 upstream
-  exchange calls at N=8). Auto-refresh at 5 min over an 8h day is ~860 Worker
-  requests — under 1% of the 100k/day free limit, so Cloudflare is never the
-  binding constraint; the exchanges are. Returning to the tab therefore refetches
-  **only if data is older than `MIN_REFETCH_MS` (60s)** — an unguarded
-  `visibilitychange` reload turned ordinary tab-switching into a burst generator,
-  which is precisely what trips Bybit's geo-block and OKX's rate limit.
-  `?auto=off` (persisted as `ppd_auto`) disables the timer entirely; the refresh
-  button and the staleness banner both still work.
+- **Refresh is MANUAL by default — nothing fetches until you press the button.**
+  Not boot, not returning to the tab. One refresh = 1 macro + N asset requests
+  (~32 upstream exchange calls at N=8), and the binding constraint is never
+  Cloudflare (auto at 5 min over an 8h day is ~860 requests, under 1% of the
+  100k/day free limit) — it is the exchanges. `?auto=on` (persisted as
+  `ppd_auto`) restores the 5-minute timer and the refetch-on-return; under it,
+  returning to the tab refetches **only if data is older than `MIN_REFETCH_MS`
+  (60s)**, because an unguarded `visibilitychange` reload turned ordinary
+  tab-switching into a burst generator — precisely what trips Bybit's geo-block
+  and OKX's rate limit. The staleness banner works in both modes.
+- **A manual ETF override expires after 24h** (`ETF_TTL_MS` in
+  `src/weather.js`). It is a reading of *today's* flow, but it is persisted and
+  relayed to every asset on every refresh — left forever it silently pins layer
+  1 of the whole watchlist to the same ±1 for weeks. The button shows its age.
 - **Client concurrency is capped at 3** (`POOL` in `src/api.js`). Firing all 8 at
   once made ~3 fail together, because the burst tripped OKX's limit at the same
   moment Bybit's CDN geo-blocked — removing the fallback for exactly the rows

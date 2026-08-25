@@ -354,6 +354,7 @@
         <tr><td class="num">Open Interest (OI)</td><td>How many positions are currently open. Rising = new money entering; falling = positions being closed</td></tr>
         <tr><td class="num">Funding</td><td>A small recurring fee between traders. Positive = buyers pay sellers (crowded upside); negative = the reverse</td></tr>
         <tr><td class="num">Discount / Premium</td><td>Price in the lower / upper half of its recent 4-hour range</td></tr>
+        <tr><td class="num" style="color:var(--chop)">&#9888; premium / &#9888; discount</td><td>The score says buy but price is in the expensive half of the range (or says sell while it is in the cheap half). The score is not wrong &#8212; it measures direction, not price. This flags that the entry itself is in the wrong place</td></tr>
         <tr><td class="num">Bull FVG 0.57%</td><td>A price gap left by a fast move, 0.57% away. Such gaps often get revisited</td></tr>
         <tr><td class="num">TREND &#8593; / RANGE</td><td>Whether price is breaking to new levels, or oscillating in a band</td></tr>
         <tr><td class="num">PDL swept + reclaimed</td><td>Price dipped below yesterday's low and then recovered &#8212; often a sign the dip was hunting stop-losses</td></tr>
@@ -373,11 +374,14 @@
   </div>
   <p>Three things are worth checking before relying on anything shown.</p>
   <h3>An amber banner across the top</h3>
-  <p>Data is more than 10 minutes old and the grid dims. A refresh failed. <strong>Do not read prices off a dimmed screen</strong> &#8212; this warning exists specifically because showing stale prices as if live is the worst thing this tool could do.</p>
+  <p>Data is more than 10 minutes old and the grid dims &#8212; either a refresh failed, or none has been asked for. <strong>The page never fetches on its own: it loads empty and waits for the refresh button.</strong> Nothing is live until you press it. <strong>Do not read prices off a dimmed screen</strong> &#8212; this warning exists specifically because showing stale prices as if live is the worst thing this tool could do.</p>
+  <h3>An amber <code>&#9888; premium</code> or <code>&#9888; discount</code> pill beside the verdict</h3>
+  <p>The verdict and the entry price disagree. A <em>clear to long</em> reading with <code>&#9888; premium</code> means the direction looks right but price is already in the expensive half of its range &#8212; the move may be well underway. This is deliberately <strong>not</strong> subtracted from the score: the score answers "which way", this pill answers "is here a sensible place to act".</p>
   <h3>A row showing an error instead of numbers</h3>
   <p>That coin's data could not be fetched. The remaining rows are unaffected and still valid &#8212; failures are isolated to one row on purpose.</p>
   <h3>Chips reading <code>ETF 0</code> or a value marked <code>proxy</code></h3>
   <p>ETF flows publish once a day on US business days, so the figure is often stale or unavailable &#8212; and outside Bitcoin it is always borrowed. That check is the weakest of the five.</p>
+  <p>The header button can also be tapped to set that figure by hand, and a hand-set value applies to <em>every</em> coin on the list until it expires 24 hours later. The button shows how long ago it was set (<code>ETF IN &#183; 6h</code>). If it reads anything other than a plain <code>ETF</code> figure, one of the five checks is being answered by you rather than by data.</p>
   <div class="note">
     <span class="lbl">Two structural limits</span>
     <p><strong>Days are measured in UTC</strong>, so "yesterday's high" follows the exchange clock, not local time. And <strong>order-book readings are shallow</strong> &#8212; they cover roughly the nearest 1% of price and can be withdrawn instantly, so they are a hint, never a trigger.</p>

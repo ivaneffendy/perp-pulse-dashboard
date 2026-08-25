@@ -90,6 +90,31 @@ const CYCLE = [null, 'in', 'out', 'flat'];
 const LABEL = { in: 'ETF IN', out: 'ETF OUT', flat: 'ETF FLAT' };
 
 /**
+ * A manual override is a reading of TODAY's flow, so it must not outlive the
+ * day. Left indefinitely it silently forces the same +1 (or -1) onto layer 1
+ * of EVERY asset on EVERY refresh for as long as localStorage survives — a
+ * value set on Monday still moving Friday's scores. Expire it instead.
+ */
+const ETF_TTL_MS = 24 * 60 * 60 * 1000;
+
+function readManual() {
+  const v = localStorage.getItem('ppd_etf');
+  if (!v) return null;
+  const at = Number(localStorage.getItem('ppd_etf_at'));
+  if (!Number.isFinite(at) || Date.now() - at > ETF_TTL_MS) {
+    localStorage.removeItem('ppd_etf');
+    localStorage.removeItem('ppd_etf_at');
+    return null;
+  }
+  return { v, at };
+}
+
+const ageLabel = (at) => {
+  const m = Math.floor((Date.now() - at) / 60000);
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h`;
+};
+
+/**
  * ETF flow is score layer 1 and its feed is dead: Farside sits behind a
  * Cloudflare bot challenge (403), so the auto value is almost always null.
  * This toggle is therefore the PRIMARY way the layer gets a value. The choice
@@ -98,13 +123,18 @@ const LABEL = { in: 'ETF IN', out: 'ETF OUT', flat: 'ETF FLAT' };
  */
 export function initEtfToggle(onChange) {
   const btn = document.getElementById('etf-toggle');
-  let manual = localStorage.getItem('ppd_etf') || null;
+  let held = readManual();
+  let manual = held?.v ?? null;
 
   const paint = (auto) => {
+    // The override may have aged out since the last paint.
+    const cur = readManual();
+    if (cur) held = cur; else manual = null;
     btn.classList.toggle('manual', !!manual);
     if (manual) {
-      btn.textContent = LABEL[manual];
-      btn.title = 'Manual override — tap to cycle (in → out → flat → auto)';
+      btn.textContent = `${LABEL[manual]} · ${ageLabel(held.at)}`;
+      btn.title = 'Manual override, expires 24h after you set it — '
+        + 'tap to cycle (in → out → flat → auto)';
       return;
     }
     btn.textContent = auto == null ? 'ETF —' : 'ETF ' + fmtUsd(auto);
@@ -115,15 +145,24 @@ export function initEtfToggle(onChange) {
 
   btn.addEventListener('click', () => {
     manual = CYCLE[(CYCLE.indexOf(manual) + 1) % CYCLE.length];
-    if (manual) localStorage.setItem('ppd_etf', manual);
-    else localStorage.removeItem('ppd_etf');
+    if (manual) {
+      held = { v: manual, at: Date.now() };
+      localStorage.setItem('ppd_etf', manual);
+      localStorage.setItem('ppd_etf_at', String(held.at));
+    } else {
+      held = null;
+      localStorage.removeItem('ppd_etf');
+      localStorage.removeItem('ppd_etf_at');
+    }
     paint(null);
     onChange();
   });
 
   paint(null);
   return {
-    get: () => manual,
+    // Re-checked on every read: a refresh that straddles the 24h boundary must
+    // fall back to auto rather than keep scoring off an expired override.
+    get: () => (readManual() ? manual : (manual = null)),
     refresh: (macro) => paint(macro?.etfBtc ?? null),
   };
 }
