@@ -52,6 +52,9 @@ h1 span{color:var(--steel)}
 .badge{font-size:10px;padding:2px 7px;border-radius:999px;
   border:1px solid var(--border);color:var(--muted)}
 .badge.hot{border-color:var(--warn);color:var(--warn)}
+/* Provenance, not a market condition — dashed like the weather widget so it
+   never reads as a signal. */
+.badge.src-alt{border-style:dashed;border-color:var(--steel);color:var(--steel)}
 .pos{color:var(--up)} .neg{color:var(--down)} .flat{color:var(--muted)}
 
 /* Score/equilibrium conflict — score.js and equilibrium.js are never summed,

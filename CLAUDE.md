@@ -158,6 +158,13 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   ±0.5–1%. Walls are *immediate-book* liquidity and are spoofable — one
   confluence input, not a trigger. Deeper walls need a WS-maintained book.
 - **Liquidations / heatmaps are intentionally absent** — no free source worth it.
+- **Which venue served a row is shown, because the fallback is not equivalent.**
+  Bybit is primary and OKX takes over when Bybit's CDN geo-blocks the edge — but
+  the two disagree on funding, OI and candles, so an OKX-served row is scored off
+  different numbers. `src/matrix.js` tags it `via OKX` (dashed, styled as
+  provenance rather than a signal); the detail panel names the venue and shows
+  `oi.source` separately, since Bybit's OI endpoint fails on its own and gets
+  patched from OKX even on Bybit-served rows.
 - **Stale data greys the grid and shows a banner after 10 min.** Silently showing
   old prices as live is the worst failure this tool can have.
 - **Refresh is MANUAL by default — nothing fetches until you press the button.**

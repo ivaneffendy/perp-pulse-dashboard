@@ -15,6 +15,11 @@ const stat = (k, v, sub) => {
   return s;
 };
 
+/** Which venues the aggregate OI actually spans — it is a sum, not one reading. */
+const venueList = (venues) => (venues
+  ? Object.entries(venues).filter(([, v]) => v != null).map(([k]) => k).join(' + ')
+  : '');
+
 export function renderDetail(node, d, onClose) {
   node.innerHTML = '';
   node.hidden = false;
@@ -53,15 +58,20 @@ export function renderDetail(node, d, onClose) {
   }
 
   const m = el('div', 'block');
-  m.append(el('div', 'label', 'Market'));
+  // Which venue actually served this row. Bybit is primary and OKX is the
+  // fallback, so the two are NOT interchangeable — funding, OI and the candles
+  // every signal is derived from all differ between them.
+  m.append(el('div', 'label', d.source ? `Market · via ${d.source}` : 'Market'));
   const g = el('div', 'grid');
   g.append(
     stat('Funding', d.funding.rate.toFixed(4) + '%',
       `annualized ~${(d.funding.rate * 3 * 365).toFixed(1)}%`),
     stat('Next funding', countdown(d.funding.nextFundingTime)),
     stat('Open interest', fmtCoin(d.oi.aggCoin ?? d.oi.coin) + ' ' + d.symbol,
-      fmtUsd(d.oi.aggUsd ?? d.oi.usd)),
-    stat('OI Δ 1h / 4h', `${fmtPct(d.oi.d1h)} / ${fmtPct(d.oi.d4h)}`),
+      [fmtUsd(d.oi.aggUsd ?? d.oi.usd), venueList(d.oi.venues)].filter(Boolean).join(' · ')),
+    // OI can come from OKX even when the core row came from Bybit — Bybit's OI
+    // endpoint geo-fails on its own. This is the value score layer 3 reads.
+    stat('OI Δ 1h / 4h', `${fmtPct(d.oi.d1h)} / ${fmtPct(d.oi.d4h)}`, d.oi.source ?? ''),
     stat('Taker buy/sell',
       d.positioning?.taker == null ? 'n/a' : d.positioning.taker.toFixed(3), '1h aggressor flow'),
     stat('Long / short',

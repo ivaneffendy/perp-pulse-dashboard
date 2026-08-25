@@ -89,6 +89,21 @@ export function renderRow(base, result) {
   if (oiDetail === 'fresh shorts' || oiDetail === 'short covering') {
     bot.append(el('span', 'badge hot', oiDetail));
   }
+  // Bybit is primary. A row served by the OKX fallback was scored off a
+  // different venue's candles, funding and OI, so the swap must be visible —
+  // silently passing it off as the usual source is how you size a position on
+  // numbers you think you recognise.
+  if (d.source && !d.source.startsWith('Bybit')) {
+    const v = el('span', 'badge src-alt', `via ${d.source.split(' ')[0]}`);
+    v.title = `Bybit was unreachable for ${base} — price, funding, OI and every `
+      + `kline-derived signal came from ${d.source} instead.`;
+    bot.append(v);
+  }
+  if (d.oi.source === 'unavailable') {
+    const v = el('span', 'badge src-alt', 'OI n/a');
+    v.title = 'Neither venue returned open interest — score layer 3 has nothing to read.';
+    bot.append(v);
+  }
 
   row.append(top, mid, bot, scoreChips(s.layers));
   return row;
