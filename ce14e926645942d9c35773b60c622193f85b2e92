@@ -1,0 +1,24 @@
+docs/superpowers/specs/2026-08-25-ltf-absorption-design.md
+  43718e6878c17a05 1-264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "ce14e926645942d9c35773b60c622193f85b2e92",
+  "prompts": {
+    "43718e6878c17a05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "777d5adb-9d2f-440d-b3d2-f231238e3a17",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 272,
+      "total_deletions": 8,
+      "accepted_lines": 264,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/9a651e027efd9b92c317840095b22eb92bf05467cad0366a5d0f4a9cd8771067"
+    }
+  }
+}
