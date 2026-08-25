@@ -1,0 +1,32 @@
+src/detail.js
+  43718e6878c17a05 18-22,61-64,71-74
+docs/reading-the-dashboard.html
+  43718e6878c17a05 365-366
+src/matrix.js
+  43718e6878c17a05 92-106
+CLAUDE.md
+  43718e6878c17a05 161-167
+styles.css
+  43718e6878c17a05 55-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "695a2902006bd524bf24335bb2c6ba48a0a1d8e5",
+  "prompts": {
+    "43718e6878c17a05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "777d5adb-9d2f-440d-b3d2-f231238e3a17",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 40,
+      "total_deletions": 3,
+      "accepted_lines": 40,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/6d5225fd120861b90a5d043307c5a6c26b707c78f070b0d49da363fb44b4bcbb"
+    }
+  }
+}
