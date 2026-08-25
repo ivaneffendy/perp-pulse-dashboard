@@ -103,6 +103,17 @@ async function attempt(fn) {
 }
 
 /**
+ * A rejected symbol is refused outright rather than substituted. Serving BTC's
+ * numbers under a mistyped name is the one failure a user-typed symbol field
+ * must never produce.
+ */
+const badSymbol = (url) => json({
+  error: 'Invalid symbol',
+  detail: `${JSON.stringify(url.searchParams.get('symbol'))} is not a valid base `
+    + 'coin — expected 2-15 letters or digits, e.g. BTC or 1000PEPE.',
+}, 400);
+
+/**
  * ETF net flow for score layer 1, supplied by the CALLER as `?etf=`.
  *
  * /asset deliberately does NOT fetch macro itself: eight concurrent asset
@@ -125,6 +136,7 @@ function etfFromParam(raw) {
 async function handleAsset(url) {
   const now = Date.now();
   const sym = resolvePair(url.searchParams.get('symbol') || 'BTC');
+  if (!sym) return badSymbol(url);
   const deep = url.searchParams.has('deep');
   const debug = url.searchParams.has('debug');
   const showBins = url.searchParams.has('bins');
@@ -145,8 +157,21 @@ async function handleAsset(url) {
     const alt = await attempt(() => okxCore(sym, now, fetcher(30)));
     if (alt.ok) { coreVal = alt.val; fellBack = true; }
     else {
-      return json({ symbol: sym.base, error: 'No core source reachable',
-                    detail: `bybit: ${coreErr} | okx: ${alt.err}` }, 502);
+      // A coin outside the verified set that no venue serves is almost always
+      // simply not listed — not an outage. Saying "no core source reachable"
+      // with a raw upstream TypeError attached is a developer's message shown
+      // to someone who just mistyped a ticker. Keep the technical text, but
+      // under a key the page does not surface.
+      const upstream = `bybit: ${coreErr} | okx: ${alt.err}`;
+      const notListed = !sym.known;
+      return json({
+        symbol: sym.base,
+        // No need to repeat the ticker — `symbol` is right there, and the page
+        // renders this next to it.
+        error: notListed ? 'Not listed on Bybit or OKX' : 'No core source reachable',
+        ...(notListed ? {} : { detail: upstream }),
+        upstream,
+      }, 502);
     }
   }
 
@@ -187,6 +212,9 @@ async function handleAsset(url) {
   const payload = {
     ts: now,
     symbol: sym.base,
+    // false = venue coverage was never verified for this base. It resolved and
+    // answered, but it is outside the checked set, so the UI says so.
+    known: sym.known,
     source: c.source,
     price: { mark: c.mark, chg1h: c.chg1h, chg24h: c.chg24h, chg4h: null },
     funding: { rate: c.funding, nextFundingTime: c.nextFundingTime },
@@ -272,6 +300,7 @@ async function handleMacro(url) {
 export async function handleLtf(url) {
   const now = Date.now();
   const sym = resolvePair(url.searchParams.get('symbol') || 'BTC');
+  if (!sym) return badSymbol(url);
 
   let res = await attempt(() => bybitLtf(sym, now, fetcher(15)));
   let bybitErr = null;

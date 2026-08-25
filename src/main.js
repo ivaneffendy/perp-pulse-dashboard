@@ -24,9 +24,25 @@ if (params.get('watchlist')) {
 if (params.get('auto')) localStorage.setItem('ppd_auto', params.get('auto').toLowerCase());
 const AUTO = (localStorage.getItem('ppd_auto') || 'off') !== 'off';
 
-const saved = (localStorage.getItem('ppd_watchlist') || '')
+const readSaved = () => (localStorage.getItem('ppd_watchlist') || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
-const WATCHLIST = saved.length ? saved : DEFAULT_WATCHLIST;
+
+// Mutable now that coins can be pinned and removed from the page itself.
+let WATCHLIST = readSaved().length ? readSaved() : [...DEFAULT_WATCHLIST];
+
+/**
+ * Looked-up coins that have NOT been pinned. Held in memory only: they survive
+ * a Refresh so a lookup is not lost mid-scan, but not a page reload — an
+ * unpinned coin is a question being asked, not part of the watchlist.
+ */
+const temp = new Set();
+
+const VALID_BASE = /^[A-Z0-9]{2,15}$/;
+const symbols = () => [...WATCHLIST, ...[...temp].filter((s) => !WATCHLIST.includes(s))];
+
+function saveWatchlist() {
+  localStorage.setItem('ppd_watchlist', WATCHLIST.join(','));
+}
 
 const $ = (id) => document.getElementById(id);
 let lastGood = 0;
@@ -90,6 +106,82 @@ async function openDetail(symbol) {
   }
 }
 
+/**
+ * One row, wired with its controls. Pin/remove sit on the row itself, so both
+ * must stop propagation — the row's own click opens the detail panel, and a
+ * mis-tap that opened a panel instead of removing a coin would be maddening on
+ * a phone.
+ */
+function paintRow(base, res) {
+  const pinned = WATCHLIST.includes(base);
+  const node = renderRow(base, res, {
+    pinned,
+    onPin: () => {
+      WATCHLIST.push(base);
+      temp.delete(base);
+      saveWatchlist();
+      repaint();
+    },
+    onRemove: () => {
+      WATCHLIST = WATCHLIST.filter((s) => s !== base);
+      temp.delete(base);
+      saveWatchlist();
+      $('matrix').querySelector(`[data-symbol="${base}"]`)?.remove();
+      if (openSymbol === base) closeDetail();
+      repaint();
+    },
+  });
+  if (base === openSymbol) node.classList.add('open');
+  node.addEventListener('click', () => openDetail(base));
+  return node;
+}
+
+/** Re-label rows in place after a pin/remove, without refetching anything. */
+function repaint() {
+  for (const node of [...$('matrix').children]) {
+    const base = node.dataset.symbol;
+    node.classList.toggle('temp', !WATCHLIST.includes(base));
+    const pin = node.querySelector('.pin-btn');
+    // An errored row has nothing worth pinning, so leave its pin hidden.
+    if (pin && !node.classList.contains('err')) pin.hidden = WATCHLIST.includes(base);
+  }
+  const extra = temp.size ? ` · ${temp.size} unpinned` : '';
+  $('src').textContent =
+    `${WATCHLIST.length} assets${extra} · ${AUTO ? 'auto 5m' : 'manual only'}`;
+}
+
+/** Look up a typed coin and drop it in as an unpinned row. */
+async function lookup(raw) {
+  const base = String(raw || '').trim().toUpperCase();
+  const input = $('wl-input');
+  if (!VALID_BASE.test(base)) {
+    showError(`"${raw}" is not a valid ticker — 2-15 letters or digits, e.g. PEPE.`);
+    return;
+  }
+  if (WATCHLIST.includes(base) || temp.has(base)) {
+    input.value = '';
+    $('matrix').querySelector(`[data-symbol="${base}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return;
+  }
+  showError('');
+  input.disabled = true;
+  temp.add(base);
+  try {
+    const res = await fetchAsset(base, { etf: etfValue })
+      .then((data) => ({ ok: true, data }), (e) => ({ ok: false, err: e.message }));
+    // A coin that does not list simply fails its own row, exactly like a dead
+    // venue does — it never blanks the grid.
+    const node = paintRow(base, res);
+    const prev = $('matrix').querySelector(`[data-symbol="${base}"]`);
+    if (prev) prev.replaceWith(node); else $('matrix').prepend(node);
+    input.value = '';
+  } finally {
+    input.disabled = false;
+    repaint();
+  }
+}
+
 async function load() {
   const btn = $('refresh');
   btn.disabled = true;
@@ -111,11 +203,16 @@ async function load() {
   const manual = etf.get();
   etfValue = manual != null ? manual : (macro?.etfBtc ?? null);
 
-  await fetchMatrix(WATCHLIST, { etf: etfValue }, (base, res) => {
+  const wanted = symbols();
+  // Rows for coins no longer on the list must go, or a removal only takes
+  // effect after a reload.
+  for (const [base, node] of rows) {
+    if (!wanted.includes(base)) { node.remove(); rows.delete(base); }
+  }
+
+  await fetchMatrix(wanted, { etf: etfValue }, (base, res) => {
     if (res.ok) anyOk = true;
-    const node = renderRow(base, res);
-    if (base === openSymbol) node.classList.add('open');
-    node.addEventListener('click', () => openDetail(base));
+    const node = paintRow(base, res);
     const prev = rows.get(base);
     if (prev) prev.replaceWith(node); else matrix.appendChild(node);
     rows.set(base, node);
@@ -125,8 +222,9 @@ async function load() {
   if (anyOk) {
     lastGood = Date.now();
     $('ts').textContent = new Date().toLocaleTimeString();
+    const extra = temp.size ? ` · ${temp.size} unpinned` : '';
     $('src').textContent =
-      `${WATCHLIST.length} assets · ${AUTO ? 'auto 5m' : 'manual only'}`;
+      `${WATCHLIST.length} assets${extra} · ${AUTO ? 'auto 5m' : 'manual only'}`;
   } else {
     showError('Could not reach the data proxy. Set it once with ?api=<worker-url>.');
   }
@@ -153,6 +251,20 @@ document.addEventListener('visibilitychange', () => {
   if (Date.now() - lastGood > MIN_REFETCH_MS) load();
 });
 $('refresh').addEventListener('click', () => load());
+
+$('wl-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') lookup(e.target.value);
+});
+$('wl-reset').addEventListener('click', () => {
+  WATCHLIST = [...DEFAULT_WATCHLIST];
+  temp.clear();
+  saveWatchlist();
+  closeDetail();
+  $('matrix').innerHTML = '';
+  showError('');
+  repaint();
+});
+
 setInterval(checkStale, 30_000);
 
 // Manual mode is the default: the very first fetch, like every fetch after

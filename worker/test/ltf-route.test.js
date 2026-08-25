@@ -91,6 +91,16 @@ test('a quiet market reports quiet, not a fabricated signal', async () => {
   assert.equal(b.side, 0);
 });
 
+test('a rejected symbol returns 400 rather than quietly serving BTC', async () => {
+  const res = await withFetch(
+    async () => { throw new Error('no upstream call should be made'); },
+    () => handleLtf(new URL('https://w/ltf?symbol=BTC%26limit%3D9999')),
+  );
+  assert.equal(res.status, 400);
+  const b = await res.json();
+  assert.equal(b.error, 'Invalid symbol');
+});
+
 test('CORS headers are present so the page can call it', async () => {
   const res = await withFetch(
     async () => ok({ result: { list: rows({ hot: true }) } }),

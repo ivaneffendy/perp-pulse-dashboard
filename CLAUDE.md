@@ -93,9 +93,28 @@ reimplement it.
 `DEFAULT_WATCHLIST` is playbook §II's fixed eight: BTC, ETH, SOL, NEAR, SUI,
 AVAX, LINK, ARB. `PAIRS` is wider (adds HYPE, WLD, RENDER, ZEC, ONDO, ASTER,
 JTO, XRP, BNB, DOGE, ADA) because the trade journal shows real rotation into
-coins outside §II. Override with `?watchlist=BTC,HYPE,...` (persisted to
-`localStorage.ppd_watchlist`). All 19 bases verified present on both Bybit
-linear and OKX SWAP (2026-08-19).
+coins outside §II. All 19 bases verified present on both Bybit linear and OKX
+SWAP (2026-08-19).
+
+**`PAIRS` is no longer a gate — it is the verified set.** Any base matching
+`VALID_BASE` (`/^[A-Z0-9]{2,15}$/`) resolves, tagged `known: false` and badged
+`unverified` in the UI. The regex, not the list, is what keeps arbitrary
+`?symbol=` strings out of upstream URLs, and it is deliberately narrow: no
+separators or punctuation, so nothing can append a query parameter or traverse
+a path. A rejected symbol gets **400**, never a silent substitution — serving
+BTC's numbers under a mistyped name is the one failure a user-typed field must
+not produce. `worker/test/pairs.test.js` guards the rejection list.
+
+Derived symbols can be wrong even when they resolve: Bybit lists PEPE as
+`1000PEPEUSDT`, so `PEPEUSDT` 404s there and OKX serves the row instead. That
+is exactly what `unverified` warns about. A base neither venue lists returns a
+plain `Not listed on Bybit or OKX`, with the raw upstream text moved to
+`upstream` so the page shows the readable line rather than a TypeError.
+
+The watchlist is editable from the page: type a ticker to look it up (an
+unpinned, dashed row held in memory — survives Refresh, not a reload), `+ pin`
+to persist it to `localStorage.ppd_watchlist`, `✕` to remove any row including
+the §II eight, and Reset to restore them. `?watchlist=BTC,HYPE,...` still works.
 
 OI and wall sizes are in the **base coin**, so the page formats units per symbol
 (thousands of BTC vs billions of DOGE).

@@ -364,6 +364,7 @@
         <tr><td class="num" style="color:var(--accent)">proxy</td><td>On the ETF chip: this is Bitcoin's ETF figure applied to another coin, because only Bitcoin has spot ETFs. It is background weather, not that coin's own data</td></tr>
         <tr><td class="num">via OKX</td><td>This row's numbers came from the backup exchange because the usual one could not be reached. The two exchanges disagree slightly on price, funding and open interest, so the reading is sound but not identical to the others. A row without this tag came from the usual source</td></tr>
         <tr><td class="num">OI n/a</td><td>Neither exchange returned open interest, so one of the five checks had nothing to read</td></tr>
+        <tr><td class="num">unverified</td><td>A coin you added yourself, outside the checked list. It resolved and the exchange answered, but nobody confirmed that this exchange lists it under the name we guessed &#8212; so treat its numbers with a little more suspicion than the others</td></tr>
         <tr><td class="num" style="color:var(--up)">Absorbed at the low / high</td><td>On the 15-minute chart, a burst of unusually heavy trading was met by a long rejection wick &#8212; buyers (or sellers) pushed, and someone sat there taking the other side. The level held. This is the healthy case</td></tr>
         <tr><td class="num" style="color:var(--down)">Initiative &#8212; not a sweep</td><td>Heavy trading, but the candle is a big solid body with no rejection: the level is being taken, not defended. The opposite of the above, and a reason to stand aside rather than buy the dip</td></tr>
       </tbody>
@@ -385,7 +386,9 @@
   <h3>An amber <code>&#9888; premium</code> or <code>&#9888; discount</code> pill beside the verdict</h3>
   <p>The verdict and the entry price disagree. A <em>clear to long</em> reading with <code>&#9888; premium</code> means the direction looks right but price is already in the expensive half of its range &#8212; the move may be well underway. This is deliberately <strong>not</strong> subtracted from the score: the score answers "which way", this pill answers "is here a sensible place to act".</p>
   <h3>A row showing an error instead of numbers</h3>
-  <p>That coin's data could not be fetched. The remaining rows are unaffected and still valid &#8212; failures are isolated to one row on purpose.</p>
+  <p>That coin's data could not be fetched. The remaining rows are unaffected and still valid &#8212; failures are isolated to one row on purpose. A coin you typed yourself may simply not exist on either exchange, which reads <code>Not listed on Bybit or OKX</code>.</p>
+  <h3>A row with a dashed left edge</h3>
+  <p>A coin you looked up but have not kept. It behaves like any other row, but it is not part of your watchlist &#8212; it disappears when the page is reloaded. Press <code>+ pin</code> to keep it, or <code>&#10005;</code> to drop it. <code>&#10005;</code> removes any row, including the eight core coins; <code>Reset</code> brings those back.</p>
   <h3>Chips reading <code>ETF 0</code> or a value marked <code>proxy</code></h3>
   <p>ETF flows publish once a day on US business days, so the figure is often stale or unavailable &#8212; and outside Bitcoin it is always borrowed. That check is the weakest of the five.</p>
   <p>The header button can also be tapped to set that figure by hand, and a hand-set value applies to <em>every</em> coin on the list until it expires 24 hours later. The button shows how long ago it was set (<code>ETF IN &#183; 6h</code>). If it reads anything other than a plain <code>ETF</code> figure, one of the five checks is being answered by you rather than by data.</p>

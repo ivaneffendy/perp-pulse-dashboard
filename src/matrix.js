@@ -24,16 +24,40 @@ export function scoreChips(layers) {
   return box;
 }
 
-export function renderRow(base, result) {
+/**
+ * Pin and remove live on the row, which is itself clickable, so both stop
+ * propagation — a mis-tap that opened the detail panel instead of removing a
+ * coin would be maddening on a phone.
+ */
+function rowControls({ pinned, canPin = true, onPin, onRemove }) {
+  const box = el('span', 'row-ctl');
+  const pin = el('button', 'pin-btn', '+ pin');
+  pin.title = 'Keep this coin on the watchlist';
+  // Nothing to pin if the coin does not resolve to real data.
+  pin.hidden = pinned || !canPin;
+  pin.addEventListener('click', (e) => { e.stopPropagation(); onPin(); });
+
+  const rm = el('button', 'rm-btn', '✕');
+  rm.title = 'Remove from the watchlist';
+  rm.addEventListener('click', (e) => { e.stopPropagation(); onRemove(); });
+
+  box.append(pin, rm);
+  return box;
+}
+
+export function renderRow(base, result, ctl = null) {
   const row = el('div', 'row');
   row.dataset.symbol = base;
+  if (ctl && !ctl.pinned) row.classList.add('temp');
 
   if (!result.ok) {
-    // One dead venue degrades ONE row. The rest of the grid still paints.
+    // One dead venue degrades ONE row — and so does a coin that simply does not
+    // list on either venue. The rest of the grid still paints.
     row.classList.add('err');
     row.dataset.score = '0';
     const top = el('div', 'row-top');
     top.append(el('span', 'tkr', base), el('span', 'vd', result.err));
+    if (ctl) top.append(rowControls({ ...ctl, canPin: false }));
     row.append(top);
     return row;
   }
@@ -65,6 +89,7 @@ export function renderRow(base, result) {
     el('span', signClass(d.price.chg1h), fmtPct(d.price.chg1h)),
   );
   top.append(px);
+  if (ctl) top.append(rowControls(ctl));
 
   const mid = el('div', 'row-mid');
   mid.append(
@@ -102,6 +127,14 @@ export function renderRow(base, result) {
   if (d.oi.source === 'unavailable') {
     const v = el('span', 'badge src-alt', 'OI n/a');
     v.title = 'Neither venue returned open interest — score layer 3 has nothing to read.';
+    bot.append(v);
+  }
+  // Resolved and answered, but its venue coverage was never verified the way
+  // the §II set was, so say so rather than implying equal footing.
+  if (d.known === false) {
+    const v = el('span', 'badge src-alt', 'unverified');
+    v.title = `${base} is outside the checked pair list — it resolved and the venue `
+      + 'answered, but coverage and symbol mapping were never confirmed for it.';
     bot.append(v);
   }
 
