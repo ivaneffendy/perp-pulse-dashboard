@@ -1,0 +1,42 @@
+index.html
+  43718e6878c17a05 27-33
+styles.css
+  43718e6878c17a05 58-78
+src/main.js
+  43718e6878c17a05 27,29-45,109-184,206-213,215,225,227,254-267
+CLAUDE.md
+  43718e6878c17a05 96-117
+docs/reading-the-dashboard.html
+  43718e6878c17a05 367,389-391
+worker/test/ltf-route.test.js
+  43718e6878c17a05 94-103
+worker/src/index.js
+  43718e6878c17a05 106-115,139,160-174,215-217,303
+worker/src/pairs.js
+  43718e6878c17a05 2-4,6-7,31-45,47-49
+src/matrix.js
+  43718e6878c17a05 27-48,51,54-55,60,92,132-139
+worker/test/pairs.test.js
+  43718e6878c17a05 10,17,20-24,27-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "37c971c5a685854563080d32b69a62060e267c53",
+  "prompts": {
+    "43718e6878c17a05": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "777d5adb-9d2f-440d-b3d2-f231238e3a17",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 323,
+      "total_deletions": 37,
+      "accepted_lines": 316,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/37f7ed575013668be22bc1d196a918c2eee63a0b97fe87fb05b1cd258de06f4b"
+    }
+  }
+}
