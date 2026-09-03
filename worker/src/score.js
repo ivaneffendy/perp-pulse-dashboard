@@ -22,16 +22,23 @@ export function scoreAsset(input) {
   const T = THRESHOLDS;
   const layers = [];
 
-  // Layer 1 — Spot ETF net flows (macro; proxied onto alts)
+  // Layer 1 — Spot ETF net flows. §VII's neutral column is "Flat / neutral /
+  // no data"; a proxied flow (BTC's, fed in for an asset with no spot ETF of
+  // its own) is exactly "no data" for THAT asset and must score 0, same as a
+  // genuinely missing flow. The number is still shown (fmtM) so the proxy
+  // badge stays informative — only the score is zeroed.
+  const etfIsProxy = !!input.etfProxy;
   let etf = 0;
-  if (input.etfFlow != null) {
+  if (!etfIsProxy && input.etfFlow != null) {
     if (input.etfFlow > T.etfFlowUsd) etf = 1;
     else if (input.etfFlow < -T.etfFlowUsd) etf = -1;
   }
   layers.push({
     key: 'etf', label: 'ETF', value: etf,
-    detail: input.etfFlow == null ? 'no data' : fmtM(input.etfFlow),
-    proxy: !!input.etfProxy,
+    detail: input.etfFlow == null ? 'no data'
+      : etfIsProxy ? `${fmtM(input.etfFlow)} (BTC, proxy — not scored)`
+      : fmtM(input.etfFlow),
+    proxy: etfIsProxy,
   });
 
   // Layer 2 — Funding. §VII leaves 0–0.005% and 0.01–0.015% undefined; both

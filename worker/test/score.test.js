@@ -64,9 +64,33 @@ test('a missing ETF flow scores 0 rather than throwing', () => {
   assert.equal(r.layers.find((l) => l.key === 'etf').detail, 'no data');
 });
 
-test('the ETF layer carries the proxy flag through to the UI', () => {
-  const r = scoreAsset({ ...base, etfFlow: 100e6, etfProxy: true });
-  assert.equal(r.layers.find((l) => l.key === 'etf').proxy, true);
+test('a proxied ETF flow scores 0 regardless of magnitude, but still carries the proxy flag and the raw number', () => {
+  const bull = scoreAsset({ ...base, etfFlow: 100e6, etfProxy: true });
+  assert.equal(layer(bull, 'etf'), 0);
+  assert.equal(bull.layers.find((l) => l.key === 'etf').proxy, true);
+  assert.match(bull.layers.find((l) => l.key === 'etf').detail, /\+\$100M/);
+
+  const bear = scoreAsset({ ...base, etfFlow: -100e6, etfProxy: true });
+  assert.equal(layer(bear, 'etf'), 0);
+});
+
+test('regression: a proxied ETF outflow must not, by itself, tip a non-BTC asset into CLEAR TO SHORT', () => {
+  // Same shape as the dashboard misreading a discount-POI long as a short:
+  // OI (long flush) and EMA (below) genuinely score -1 each; funding and
+  // sweep sit neutral. Before the fix, BTC's proxied outflow added a third
+  // -1 and crossed the -3 threshold on its own. It must now stay neutral.
+  const input = {
+    ...base, etfFlow: -100e6, etfProxy: true, funding: 0.005, chg1h: -1, oiD1h: -1, emaSide: -1,
+  };
+  const r = scoreAsset(input);
+  assert.equal(layer(r, 'etf'), 0);
+  assert.equal(r.total, -2);
+  assert.equal(r.cls, 'chop');
+  assert.match(r.verdict, /CHOPPY/);
+
+  const asIfAssetSpecific = scoreAsset({ ...input, etfProxy: false });
+  assert.equal(asIfAssetSpecific.total, -3);
+  assert.equal(asIfAssetSpecific.cls, 'short');
 });
 
 test('always returns exactly five layers', () => {
