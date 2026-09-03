@@ -1,0 +1,26 @@
+worker/src/score.js
+  f2ac8d2622e88888 25-30,32,38-41
+worker/test/score.test.js
+  f2ac8d2622e88888 67-93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "0034667de3b27b218e9d315b0801f314dd4c20d1",
+  "prompts": {
+    "f2ac8d2622e88888": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dc92ce1c-ffa9-4b5d-a410-44f155a8c185",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 49,
+      "total_deletions": 18,
+      "accepted_lines": 38,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/fcb2da25651582f588105cc9f08bc4d125d7cba60623672899caccd0fa481aba"
+    }
+  }
+}
