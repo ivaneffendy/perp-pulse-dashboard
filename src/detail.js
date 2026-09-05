@@ -134,10 +134,18 @@ export function renderDetail(node, d, onClose) {
     if (rg.pct == null) {
       b.append(el('p', null, rg.msg));
     } else {
-      const mins = Math.max(0, Math.round(rg.barAgeMs / 60000));
+      // Negative barAgeMs means the bar is still forming. That is a contract
+      // violation (a caller passed a FORMING bar; see regime.test.js). Surface
+      // it visibly rather than clamping — a broken read must not hide as a fresh
+      // one. This is the same principle as the 15m block greys after 2 minutes:
+      // a stale or invalid read of the one live thing must be obvious.
+      const mins = rg.barAgeMs < 0 ? null : Math.round(rg.barAgeMs / 60000);
+      const ageText = mins == null
+        ? 'BAR NOT YET CLOSED (read invalid)'
+        : `bar closed ${mins}m ago`;
       b.append(el('p', null,
         `1H range ${rg.rangePct.toFixed(2)}% · ${Math.round(rg.pct)}th pct of `
-        + `${rg.samples} bars · bar closed ${mins}m ago`));
+        + `${rg.samples} bars · ${ageText}`));
     }
     node.append(b);
   }

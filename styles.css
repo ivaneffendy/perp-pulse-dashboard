@@ -52,9 +52,11 @@ h1 span{color:var(--steel)}
 .badge{font-size:10px;padding:2px 7px;border-radius:999px;
   border:1px solid var(--border);color:var(--muted)}
 .badge.hot{border-color:var(--warn);color:var(--warn)}
-/* Volatility regime. Deliberately NOT the same colour as .hot: hot marks a
-   scored signal, this marks conditions and feeds no score. */
-.badge.vol { border-style: dashed; letter-spacing: .02em; }
+/* Volatility regime is a directionless magnitude that feeds no score. In this
+   palette, hue encodes direction or a scored signal, and dashed is reserved for
+   provenance. So it earns higher contrast instead: solid border in text colour.
+   tabular-nums for a number that changes between refreshes. */
+.badge.vol{border-color:var(--text);color:var(--text);font-variant-numeric:tabular-nums}
 /* Provenance, not a market condition — dashed like the weather widget so it
    never reads as a signal. */
 .badge.src-alt{border-style:dashed;border-color:var(--steel);color:var(--steel)}
