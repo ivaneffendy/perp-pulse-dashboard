@@ -1,0 +1,26 @@
+scripts/gen_regime_fixture.js
+  f95f305849729ad5 1-62
+worker/test/regime.test.js
+  f95f305849729ad5 3,106-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "4b064f7010e04396348cff35e46a5050efdf8b11",
+  "prompts": {
+    "f95f305849729ad5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "317e2ed2-fb54-460b-b53c-251306c095c3",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 110,
+      "total_deletions": 0,
+      "accepted_lines": 110,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/93c10d0159e81773f3d23d67d742144d159047e49f2e0951566ab5f5305368bb"
+    }
+  }
+}
