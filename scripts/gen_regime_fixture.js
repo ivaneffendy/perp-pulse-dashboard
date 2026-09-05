@@ -28,9 +28,9 @@ const H1 = 60 * 60 * 1000;
 const CASES = [
   { label: 'cascade following an unscheduled policy announcement, +3h', at: '2025-10-10T22:30:00Z' },
   { label: 'deleveraging cascade', at: '2026-02-06T00:15:00Z' },
-  { label: 'mid-session expansion', at: '2026-03-02T14:15:00Z' },
-  { label: 'session-open expansion', at: '2026-08-19T13:45:00Z' },
-  { label: 'US session, ~3h after a tier-1 macro release', at: '2026-09-04T15:19:32Z' },
+  { label: 'top-25 move, still below the display cut at its own window start', at: '2026-03-02T14:15:00Z' },
+  { label: 'top-25 move, already above the cut at its window start', at: '2026-08-19T13:45:00Z' },
+  { label: 'US session, ~3h after a tier-1 macro release', at: '2026-09-04T15:00:00Z' },
 ];
 
 async function klines(endMs, limit) {

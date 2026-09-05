@@ -304,6 +304,10 @@
   buy or sell, and it never touches the &#8722;5..+5 score.</p>
   <p>The chip appears only from the 90th percentile up. Below that the market is
   behaving within its own recent normal and the row stays clean.</p>
+  <p>Tapping the row for detail shows this reading regardless of the percentile
+  &#8212; including when the tape is calm and the chip is absent. The detail panel's
+  <strong>Volatility regime</strong> block always states where the market stands,
+  because a calm reading is information too.</p>
   <div class="note">
     <span class="lbl">It describes now, not next</span>
     <p>This is a rear-view mirror, not a forecast. It tells you the tape is
@@ -356,18 +360,20 @@
     <div class="eyebrow">Screen order &#183; 3</div>
     <h2>The panel that opens when you tap</h2>
   </div>
-  <p>Tapping a row opens a detail panel with two clearly separated blocks. <strong>They can disagree, and that is intentional</strong> &#8212; the single most confusing thing about this screen if nobody explains it.</p>
+  <p>Tapping a row opens a detail panel with three clearly separated blocks. <strong>They can disagree, and that is intentional</strong> &#8212; the single most confusing thing about this screen if nobody explains it.</p>
   <div class="tbl-wrap">
     <table>
       <thead><tr><th>Block</th><th>The question it answers</th></tr></thead>
       <tbody>
         <tr><td><strong>Bias</strong></td><td>Which way are conditions leaning overall?</td></tr>
         <tr><td><strong>Pullback health</strong></td><td>Right now, is this dip orderly or is it a cascade?</td></tr>
+        <tr><td><strong>Volatility regime</strong></td><td>How disturbed is the tape right now, compared with its own recent history?</td></tr>
       </tbody>
     </table>
   </div>
   <p>Take a falling price where traders are closing positions. <strong>Bias</strong> calls that bearish &#8212; people are giving up. <strong>Pullback health</strong> calls it healthy &#8212; leveraged bets are being cleared out, which usually makes a violent continuation <em>less</em> likely.</p>
   <p>Both readings are correct. They answer different questions. That is why they sit in separate boxes with their questions written above them, and why they are never added together.</p>
+  <p>The <strong>Volatility regime</strong> block is always shown here, even when the row's <code>vol</code> chip is not &#8212; a calm reading is information too, and the panel states it either way.</p>
 </section>
 
 <section>
@@ -393,6 +399,7 @@
         <tr><td class="num">via OKX</td><td>This row's numbers came from the backup exchange because the usual one could not be reached. The two exchanges disagree slightly on price, funding and open interest, so the reading is sound but not identical to the others. A row without this tag came from the usual source</td></tr>
         <tr><td class="num">OI n/a</td><td>Neither exchange returned open interest, so one of the five checks had nothing to read</td></tr>
         <tr><td class="num">unverified</td><td>A coin you added yourself, outside the checked list. It resolved and the exchange answered, but nobody confirmed that this exchange lists it under the name we guessed &#8212; so treat its numbers with a little more suspicion than the others</td></tr>
+        <tr><td class="num">vol 94</td><td>The most recently finished hour had a wider high-to-low range than 94% of the last 180 hours. It describes how violently that market is moving right now, nothing more &#8212; not a direction, not a score input</td></tr>
         <tr><td class="num" style="color:var(--up)">Absorbed at the low / high</td><td>On the 15-minute chart, a burst of unusually heavy trading was met by a long rejection wick &#8212; buyers (or sellers) pushed, and someone sat there taking the other side. The level held. This is the healthy case</td></tr>
         <tr><td class="num" style="color:var(--down)">Initiative &#8212; not a sweep</td><td>Heavy trading, but the candle is a big solid body with no rejection: the level is being taken, not defended. The opposite of the above, and a reason to stand aside rather than buy the dip</td></tr>
       </tbody>

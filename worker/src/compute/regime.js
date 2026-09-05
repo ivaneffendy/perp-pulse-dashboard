@@ -37,8 +37,8 @@ const nodata = (why) => ({
   msg: `${why} — not enough history to rank this bar.`,
 });
 
-/** True range as a fraction of the bar's open. NaN when the open is unusable. */
-const trueRange = (b) => (b.o > 0 ? (b.h - b.l) / b.o : NaN);
+/** The bar's own high-low range as a fraction of its open. NaN when the open is unusable. */
+const barRangePct = (b) => (b.o > 0 ? (b.h - b.l) / b.o : NaN);
 
 /**
  * @param {{t:number,o:number,h:number,l:number,c:number}[]} bars
@@ -55,7 +55,7 @@ export function regime(bars, { now, intervalMs, cfg = REGIME } = {}) {
   }
 
   const cur = bars[bars.length - 1];
-  const r = trueRange(cur);
+  const r = barRangePct(cur);
   if (!Number.isFinite(r)) return nodata('Current bar has no usable open');
 
   // The baseline is strictly BEFORE the judged bar. Folding a violent bar into
@@ -63,7 +63,7 @@ export function regime(bars, { now, intervalMs, cfg = REGIME } = {}) {
   const lookback = Math.min(cfg.lookback, bars.length - 1);
   const prior = bars
     .slice(bars.length - 1 - lookback, bars.length - 1)
-    .map(trueRange)
+    .map(barRangePct)
     .filter(Number.isFinite);
 
   if (prior.length < cfg.minBars) {

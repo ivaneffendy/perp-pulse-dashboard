@@ -29,7 +29,7 @@ Phone browser (GitHub Pages, static, no build step)
 
 ### Why fan out instead of one `/matrix` call
 A Worker invocation is capped at **50 subrequests** on the free plan. One request
-per asset holds each invocation at ~6 regardless of watchlist size, and the
+per asset holds each invocation at ~7 regardless of watchlist size, and the
 matrix renders **progressively** — a slow venue on one symbol cannot blank the
 other rows. ~9 requests per refresh; ~900/day against a 100k/day limit.
 
@@ -63,7 +63,7 @@ worker/src/
   sources/          bybit · okx · binance · macro   (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
                     · absorption  (§IV Step 2, /ltf only) · regime
-  score.js          §VII bias engine        ─┐ three separate questions,
+  score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
 worker/test/        node --test suites (108 tests)

@@ -121,8 +121,6 @@ export function renderDetail(node, d, onClose) {
     node.append(h);
   }
 
-  // Sits directly below health: same Phase 2 moment, finer timeframe. Fetched
-  // only on press, so opening this panel never costs the 15m call.
   // Volatility regime. Always rendered here, unlike the matrix chip: in the
   // detail panel a calm reading is information too. Bar age is shown for the
   // same reason the 15m block greys after two minutes — a stale read of the one
@@ -149,6 +147,8 @@ export function renderDetail(node, d, onClose) {
     }
     node.append(b);
   }
+  // Sits directly below regime: same Phase 2 moment, finer timeframe. Fetched
+  // only on press, so opening this panel never costs the 15m call.
   node.append(ltfBlock(d.symbol));
 
   const m = el('div', 'block');

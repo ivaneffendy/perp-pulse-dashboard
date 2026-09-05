@@ -117,8 +117,8 @@ const GOLDEN = JSON.parse(
 const EXPECTED = {
   'cascade following an unscheduled policy announcement, +3h': { pct: 100.0, rangePct: 11.476 },
   'deleveraging cascade': { pct: 97.8, rangePct: 3.428 },
-  'mid-session expansion': { pct: 77.8, rangePct: 1.224 },
-  'session-open expansion': { pct: 97.2, rangePct: 0.795 },
+  'top-25 move, still below the display cut at its own window start': { pct: 77.8, rangePct: 1.224 },
+  'top-25 move, already above the cut at its window start': { pct: 97.2, rangePct: 0.795 },
   'US session, ~3h after a tier-1 macro release': { pct: 94.4, rangePct: 1.149 },
 };
 
@@ -136,19 +136,6 @@ test('golden fixture: pinned percentiles reproduce', () => {
     assert.equal(Math.round(r.pct * 10) / 10, want.pct, `pct for ${g.label}`);
     assert.equal(Math.round(r.rangePct * 1000) / 1000, want.rangePct, `range for ${g.label}`);
   }
-});
-
-test('golden fixture: the display cut separates disturbed from ordinary tape', () => {
-  const pcts = Object.fromEntries(
-    GOLDEN.map((g) => [g.label, regime(g.bars, {
-      now: g.judgedBarOpensAt + H1 + 1, intervalMs: H1,
-    }).pct]),
-  );
-  const over = Object.values(pcts).filter((p) => p >= 90).length;
-  // Four of the five real extremes clear the display cut; the fifth is a
-  // deliberate negative — an ordinary expansion that must NOT light the chip.
-  assert.equal(over, 4);
-  assert.ok(pcts['mid-session expansion'] < 90);
 });
 
 test('regime is not referenced by any of the other three engines', () => {
