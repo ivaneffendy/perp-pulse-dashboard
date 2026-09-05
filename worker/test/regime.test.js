@@ -160,3 +160,75 @@ test('regime is not referenced by any of the other three engines', () => {
     );
   }
 });
+
+// A name-grep for "regime" (above) cannot catch a future change that spreads
+// regime's fields into scoreAsset(...) or verdict(...) under renamed keys —
+// that would leak it into the bias score / health verdict without the string
+// "regime" ever appearing in score.js, verdict.js or absorption.js. So this
+// test pins the actual argument shape at both call sites in index.js: any
+// added (or removed, or renamed) key fails here until someone deliberately
+// updates the pinned set below.
+function extractCallArgKeys(src, fnName) {
+  const callRe = new RegExp(`\\b${fnName}\\(\\s*\\{`);
+  const m = callRe.exec(src);
+  assert.ok(m, `could not find a "${fnName}({ ... })" call in index.js`);
+
+  // Walk forward from the '{' this regex matched, counting brace depth, to
+  // find the matching close — robust to any nested object literal a future
+  // call might pass as one of the values.
+  const openBraceIdx = m.index + m[0].length - 1;
+  let depth = 0;
+  let closeBraceIdx = -1;
+  for (let i = openBraceIdx; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        closeBraceIdx = i;
+        break;
+      }
+    }
+  }
+  assert.ok(closeBraceIdx !== -1, `unbalanced braces scanning ${fnName}({ ... }) in index.js`);
+
+  const body = src.slice(openBraceIdx + 1, closeBraceIdx);
+
+  // Split the object body on top-level commas only (depth-tracked, so a
+  // comma inside a nested {}, [] or () does not split a key/value pair).
+  const keys = [];
+  let segStart = 0;
+  let d2 = 0;
+  for (let j = 0; j <= body.length; j++) {
+    const ch = body[j];
+    if (ch === '{' || ch === '(' || ch === '[') d2++;
+    else if (ch === '}' || ch === ')' || ch === ']') d2--;
+    if (j === body.length || (ch === ',' && d2 === 0)) {
+      const seg = body.slice(segStart, j).trim();
+      segStart = j + 1;
+      if (!seg) continue;
+      const keyMatch = seg.match(/^([A-Za-z_$][A-Za-z0-9_$]*)\s*(:|$)/);
+      assert.ok(keyMatch, `could not parse a key out of "${seg}" in ${fnName}({ ... })`);
+      keys.push(keyMatch[1]);
+    }
+  }
+  return keys.sort();
+}
+
+test('bias score and health verdict inputs are pinned — adding one is a playbook decision, not a refactor', () => {
+  const src = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
+
+  const pinnedMessage = (fnName) =>
+    `${fnName}({ ... })'s input set in index.js changed. Adding an input to the bias ` +
+    'score or the health verdict is a playbook-level decision, not a refactor — confirm ' +
+    'the governing playbook assigns this input a weight before updating this test\'s ' +
+    'pinned key set.';
+
+  const scoreKeys = extractCallArgKeys(src, 'scoreAsset');
+  const expectedScoreKeys =
+    ['chg1h', 'emaSide', 'etfFlow', 'etfProxy', 'funding', 'oiD1h', 'sweep'].sort();
+  assert.deepEqual(scoreKeys, expectedScoreKeys, pinnedMessage('scoreAsset'));
+
+  const verdictKeys = extractCallArgKeys(src, 'verdict');
+  const expectedVerdictKeys = ['book', 'chg1h', 'funding', 'oiD1h', 'taker'].sort();
+  assert.deepEqual(verdictKeys, expectedVerdictKeys, pinnedMessage('verdict'));
+});
