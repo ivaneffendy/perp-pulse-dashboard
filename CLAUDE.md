@@ -62,11 +62,11 @@ worker/src/
   pairs.js          allowlist + per-venue symbol mapping
   sources/          bybit · okx · binance · macro   (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
-                    · absorption  (§IV Step 2, /ltf only)
+                    · absorption  (§IV Step 2, /ltf only) · regime
   score.js          §VII bias engine        ─┐ three separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (88 tests)
+worker/test/        node --test suites (108 tests)
 ```
 
 Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
@@ -88,6 +88,11 @@ if it fails because someone "fixed" the inconsistency, read the spec first.
 
 The planned TradingView → Telegram worker must **import `verdict.js`**, not
 reimplement it.
+
+`compute/regime.js` is the **fourth** question: *is the tape behaving abnormally
+right now?* It is rendered on its own and never enters the other three — §VII
+assigns no volatility row, and `worker/test/regime.test.js` asserts by source
+inspection that `score.js`, `verdict.js` and `absorption.js` never mention it.
 
 ## Pairs
 `DEFAULT_WATCHLIST` is playbook §II's fixed eight: BTC, ETH, SOL, NEAR, SUI,
@@ -221,6 +226,17 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   once made ~3 fail together, because the burst tripped OKX's limit at the same
   moment Bybit's CDN geo-blocked — removing the fallback for exactly the rows
   that needed it.
+- **The regime baseline is ~8 days, not 30.** 200 x 1H is what the OKX fallback
+  serves in one call, and both venues must serve the same shape. A *sustained*
+  high-volatility regime renormalises within about a week and the chip goes
+  quiet. It detects transitions, not levels.
+- **The regime read is coincident, not leading.** It reports that the tape IS
+  disturbed, never that it is about to be — on the largest cascade in the study
+  window it ranked in the low 60s at the opening bar and reached the top only
+  three hours later. Do not describe it as a warning.
+- **`vol` is drawn only at/above the 90th percentile, and 90 is a DISPLAY cut.**
+  It hides a chip; no rule keys off it. The full percentile is always in
+  `signals.regime.pct`.
 
 ## Docs
 The **authoritative trading playbook** — the SMC/derivatives method this
