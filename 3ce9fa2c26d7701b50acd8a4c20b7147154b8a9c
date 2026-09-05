@@ -1,0 +1,24 @@
+worker/src/index.js
+  2be8efad06dc550f 137,165-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "3ce9fa2c26d7701b50acd8a4c20b7147154b8a9c",
+  "prompts": {
+    "2be8efad06dc550f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11933593-7b60-479c-9787-bf1e55c89a62",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 3,
+      "accepted_lines": 22,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/c331e5fe0e005377d6e6cbf63001b3defac55648aa2dde7317ce3ef525f49039"
+    }
+  }
+}
