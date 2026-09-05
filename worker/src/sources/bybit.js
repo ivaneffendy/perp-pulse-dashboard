@@ -1,4 +1,6 @@
-import { normalizeKlines, INTERVAL_15M, INTERVAL_1H, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
+import {
+  normalizeKlines, INTERVAL_15M, INTERVAL_1H, INTERVAL_4H, dailyFromHourly,
+} from '../compute/klines.js';
 
 /** lookback(20) + evalBars(3) + headroom, in one call. */
 export const LTF_BARS = 40;
@@ -7,22 +9,25 @@ const B = 'https://api.bybit.com';
 
 /**
  * Core venue — reachable from the Cloudflare edge, unlike Binance.
- * Exactly FIVE calls, to keep a fan-out invocation cheap:
- *   tickers (price, chg1h via prevPrice1h, chg24h, funding, OI level)
- *   1H klines x200  (volatility-regime baseline)
+ * FOUR calls, to keep a fan-out invocation cheap:
+ *   tickers, NO symbol filter — every linear ticker in one payload. The URL
+ *     is now IDENTICAL across every watchlist asset's concurrent invocation,
+ *     so index.js's bucketed edge cache can collapse them onto one upstream
+ *     hit; worst case (no collapsing) this still costs exactly one call, the
+ *     same as the per-symbol shape it replaces.
+ *   1H klines x200  (volatility-regime baseline, AND — re-normalized with the
+ *     forming bar kept — today/yesterday's PDH/PDL via dailyFromHourly. This
+ *     used to cost a dedicated daily-kline call; seven days of headroom in a
+ *     series already being fetched makes that call redundant.)
  *   4H klines x200  (EMA34 / equilibrium / FVG / mode)
- *   1D klines x2    (PDH/PDL — keeps the forming candle)
- *   OI history      (oiD1h / oiD4h)
+ *   OI history      (oiD1h / oiD4h; non-fatal)
  */
 export async function bybitCore(sym, now, j) {
   const S = sym.bybit;
-  const [tick, k1, k4, kd, oiH] = await Promise.all([
-    j(`${B}/v5/market/tickers?category=linear&symbol=${S}`),
-    // FIVE calls now. 1H x200 is the volatility-regime baseline (regime.js).
-    // 200 is what the OKX fallback can serve in one call, so both venues match.
+  const [tick, k1, k4, oiH] = await Promise.all([
+    j(`${B}/v5/market/tickers?category=linear`),
     j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=60&limit=200`),
     j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=240&limit=200`),
-    j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=D&limit=2`),
     // NON-FATAL. Bybit serves open-interest from a CloudFront distribution that
     // geo-blocks this Cloudflare edge far more often than tickers/kline do, and
     // one missing sub-signal must never blank the whole asset row. On failure
@@ -31,17 +36,16 @@ export async function bybitCore(sym, now, j) {
       .catch(() => null),
   ]);
 
-  const t = tick.result.list[0];
+  const t = tick.result.list.find((x) => x.symbol === S);
   if (!t) throw new Error(`Bybit has no ticker for ${S}`);
   const mark = +t.lastPrice;
 
   const bars4h = normalizeKlines(k4.result.list, INTERVAL_4H, now);
   // Forming bar DROPPED: regime ranks the last bar that actually closed.
   const bars1h = normalizeKlines(k1.result.list, INTERVAL_1H, now);
-  // Daily KEEPS the forming candle: today's running high/low is the sweep.
-  const days = normalizeKlines(kd.result.list, INTERVAL_1D, now, false);
-  const today = days.at(-1) ?? null;
-  const prevDay = days.length > 1 ? days.at(-2) : null;
+  // Same payload, forming bar KEPT: today's running high/low is the sweep, so
+  // PDH/PDL needs the hour in progress, not just closed ones.
+  const { today, prevDay } = dailyFromHourly(normalizeKlines(k1.result.list, INTERVAL_1H, now, false));
 
   const oiL = oiH?.result?.list ?? []; // newest first; empty when geo-blocked
   const oiNow = +oiL[0]?.openInterest;

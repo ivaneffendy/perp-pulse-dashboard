@@ -42,7 +42,7 @@ h1 span{color:var(--steel)}
 .row.chop{border-left-color:var(--warn)}
 .row.err{opacity:.55}
 .row.open{border-color:var(--steel)}
-.row-top{display:flex;align-items:baseline;gap:8px}
+.row-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .tkr{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;width:56px;flex:none}
 .score{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
 .vd{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
