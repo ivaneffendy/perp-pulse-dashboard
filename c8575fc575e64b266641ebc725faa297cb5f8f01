@@ -1,0 +1,34 @@
+worker/test/regime.test.js
+  f95f305849729ad5 120-121
+worker/src/compute/regime.js
+  f95f305849729ad5 40-41,58,66
+CLAUDE.md
+  f95f305849729ad5 32,66
+docs/reading-the-dashboard.html
+  f95f305849729ad5 307-310,363,370,376,402
+scripts/gen_regime_fixture.js
+  f95f305849729ad5 31-33
+src/detail.js
+  f95f305849729ad5 150-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "c8575fc575e64b266641ebc725faa297cb5f8f01",
+  "prompts": {
+    "f95f305849729ad5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "317e2ed2-fb54-460b-b53c-251306c095c3",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 21,
+      "total_deletions": 27,
+      "accepted_lines": 21,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/2610e2f72fcbdf861dfce47eeb97524b288dc92a90c50763dedf0bc55e487ac2"
+    }
+  }
+}
