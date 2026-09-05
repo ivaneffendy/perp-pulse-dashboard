@@ -1,0 +1,26 @@
+docs/reading-the-dashboard.html
+  f95f305849729ad5 297-322
+CLAUDE.md
+  f95f305849729ad5 65,69,92-96,229-239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "56a2ab9b0428c2cbd2078dfad867ea67ab96edb8",
+  "prompts": {
+    "f95f305849729ad5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "317e2ed2-fb54-460b-b53c-251306c095c3",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 46,
+      "total_deletions": 2,
+      "accepted_lines": 46,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/64ccf8c577c5fb78bf9f743601ed29d9580c801780153df4fd4791a301d28a10"
+    }
+  }
+}
