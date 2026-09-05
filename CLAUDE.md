@@ -18,7 +18,7 @@ It serves **two distinct phases**, and every feature should trace to one:
 ```
 Phone browser (GitHub Pages, static, no build step)
   ├─ GET /macro              ─▶ Worker ─▶ CoinGecko (dominance), Farside (ETF)
-  ├─ GET /asset?symbol=BTC   ─▶ Worker ─▶ Bybit  (4 calls) + macro (2, cached)
+  ├─ GET /asset?symbol=BTC   ─▶ Worker ─▶ Bybit  (5 calls) + macro (2, cached)
   ├─ GET /asset?symbol=ETH   ─▶ Worker      … one request per watchlist asset,
   │  … fanned out in parallel                  fired concurrently
   ├─ GET /asset?symbol=X&deep=1 ─▶ Worker ─▶ + OKX + Binance + Bybit book (~14)
@@ -72,7 +72,7 @@ worker/test/        node --test suites (108 tests)
 Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
 Page deploys itself via GitHub Pages — no build step.
 
-### Two engines, one codebase — this is deliberate
+### Four questions, one codebase — this is deliberate
 `score.js` and `verdict.js` **give opposite signs on price-down + OI-down**:
 
 | price ↓ + OI ↓ | |
@@ -210,7 +210,7 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   old prices as live is the worst failure this tool can have.
 - **Refresh is MANUAL by default — nothing fetches until you press the button.**
   Not boot, not returning to the tab. One refresh = 1 macro + N asset requests
-  (~32 upstream exchange calls at N=8), and the binding constraint is never
+  (~40 upstream exchange calls at N=8), and the binding constraint is never
   Cloudflare (auto at 5 min over an 8h day is ~860 requests, under 1% of the
   100k/day free limit) — it is the exchanges. `?auto=on` (persisted as
   `ppd_auto`) restores the 5-minute timer and the refetch-on-return; under it,
