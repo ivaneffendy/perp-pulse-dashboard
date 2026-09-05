@@ -150,3 +150,13 @@ test('golden fixture: the display cut separates disturbed from ordinary tape', (
   assert.equal(over, 4);
   assert.ok(pcts['mid-session expansion'] < 90);
 });
+
+test('regime is not referenced by any of the other three engines', () => {
+  for (const p of ['../src/score.js', '../src/verdict.js', '../src/compute/absorption.js']) {
+    const src = readFileSync(new URL(p, import.meta.url), 'utf8');
+    assert.ok(
+      !/regime/i.test(src),
+      `${p} references regime — it is a separate question and must never be merged`,
+    );
+  }
+});

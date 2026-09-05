@@ -11,7 +11,7 @@ import { resolvePair } from './pairs.js';
 import { bybitCore, bybitDeep, bybitLtf } from './sources/bybit.js';
 import { okxExtras, okxCore, okxOpenInterest, okxLtf } from './sources/okx.js';
 import { absorption } from './compute/absorption.js';
-import { INTERVAL_15M } from './compute/klines.js';
+import { INTERVAL_15M, INTERVAL_1H } from './compute/klines.js';
 import { binanceExtras } from './sources/binance.js';
 import { fetchMacro } from './sources/macro.js';
 import { computeWalls } from './compute/walls.js';
@@ -20,6 +20,7 @@ import { equilibrium } from './compute/equilibrium.js';
 import { nearestUnmitigatedFvg } from './compute/fvg.js';
 import { sweepState } from './compute/sweep.js';
 import { marketMode } from './compute/mode.js';
+import { regime } from './compute/regime.js';
 import { scoreAsset } from './score.js';
 import { verdict } from './verdict.js';
 
@@ -204,6 +205,10 @@ async function handleAsset(url) {
   const sweep = sweepState(c.prevDay, c.today, c.mark);
   const mode = marketMode(c.bars4h);
 
+  // The FOURTH question — see CLAUDE.md. Deliberately NOT passed to scoreAsset
+  // below, nor to verdict(), nor to absorption(): §VII has no volatility row.
+  const reg = regime(c.bars1h, { now, intervalMs: INTERVAL_1H });
+
   const score = scoreAsset({
     etfFlow, etfProxy, funding: c.funding,
     chg1h: c.chg1h, oiD1h: c.oiD1h, emaSide: ema.side, sweep,
@@ -225,6 +230,7 @@ async function handleAsset(url) {
       fvg,
       sweep,
       mode,
+      regime: reg,
     },
     score,
   };
