@@ -114,6 +114,17 @@ export function renderRow(base, result, ctl = null) {
   if (oiDetail === 'fresh shorts' || oiDetail === 'short covering') {
     bot.append(el('span', 'badge hot', oiDetail));
   }
+  // Volatility regime — the FOURTH question (see CLAUDE.md). Drawn ONLY when the
+  // tape is genuinely disturbed: a chip on every row is noise, and this grid has
+  // a 1-2 minute budget. 90 is a DISPLAY cut that hides a chip — it is not a
+  // decision threshold and no rule keys off it.
+  const rg = d.signals?.regime;
+  if (rg?.pct != null && rg.pct >= 90) {
+    const v = el('span', 'badge vol', `vol ${Math.round(rg.pct)}`);
+    v.title = `1H range ${rg.rangePct.toFixed(2)}% — ${Math.round(rg.pct)}th percentile `
+      + `of the last ${rg.samples} bars. Coincident, not predictive.`;
+    bot.append(v);
+  }
   // Bybit is primary. A row served by the OKX fallback was scored off a
   // different venue's candles, funding and OI, so the swap must be visible —
   // silently passing it off as the usual source is how you size a position on
