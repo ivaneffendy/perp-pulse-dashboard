@@ -1,5 +1,5 @@
 import { computeWalls } from '../compute/walls.js';
-import { normalizeKlines, INTERVAL_15M, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
+import { normalizeKlines, INTERVAL_15M, INTERVAL_1H, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
 import { LTF_BARS } from './bybit.js';
 
 const O = 'https://www.okx.com';
@@ -33,7 +33,9 @@ export async function okxLtf(sym, now, j) {
 export async function okxCore(sym, now, j) {
   const inst = sym.okxInst, ccy = sym.okxCcy;
   const [k1h, k4h, kd, fund, oiHist, oiNow] = await Promise.all([
-    j(`${O}/api/v5/market/candles?instId=${inst}&bar=1H&limit=2`),
+    // limit 200, not 2: the same candles now serve both the mark price and the
+    // volatility-regime baseline, so this costs no extra subrequest.
+    j(`${O}/api/v5/market/candles?instId=${inst}&bar=1H&limit=200`),
     j(`${O}/api/v5/market/candles?instId=${inst}&bar=4H&limit=200`),
     j(`${O}/api/v5/market/candles?instId=${inst}&bar=1D&limit=2`),
     j(`${O}/api/v5/public/funding-rate?instId=${inst}`).catch(() => null),
@@ -42,8 +44,11 @@ export async function okxCore(sym, now, j) {
   ]);
 
   // Keep the forming 1H bar: its close IS the current traded price.
-  const h1 = normalizeKlines(k1h.data, 60 * 60 * 1000, now, false);
+  const h1 = normalizeKlines(k1h.data, INTERVAL_1H, now, false);
   if (!h1.length) throw new Error(`OKX has no candles for ${inst}`);
+  // Same payload, forming bar dropped — regime ranks only closed bars. No
+  // second fetch: this is a re-normalize of rows already in hand.
+  const bars1h = normalizeKlines(k1h.data, INTERVAL_1H, now);
   const mark = h1.at(-1).c;
   const prev1h = h1.length > 1 ? h1.at(-2).c : mark;
 
@@ -69,7 +74,7 @@ export async function okxCore(sym, now, j) {
     oiUsd: coin * mark,
     oiD1h: Number.isFinite(o0) && Number.isFinite(o1) && o1 ? (o0 / o1 - 1) * 100 : 0,
     oiD4h: Number.isFinite(o0) && Number.isFinite(o4) && o4 ? (o0 / o4 - 1) * 100 : 0,
-    bars4h, prevDay, today,
+    bars4h, bars1h, prevDay, today,
   };
 }
 

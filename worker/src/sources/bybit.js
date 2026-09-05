@@ -1,4 +1,4 @@
-import { normalizeKlines, INTERVAL_15M, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
+import { normalizeKlines, INTERVAL_15M, INTERVAL_1H, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
 
 /** lookback(20) + evalBars(3) + headroom, in one call. */
 export const LTF_BARS = 40;
@@ -7,16 +7,20 @@ const B = 'https://api.bybit.com';
 
 /**
  * Core venue — reachable from the Cloudflare edge, unlike Binance.
- * Exactly FOUR calls, to keep a fan-out invocation cheap:
+ * Exactly FIVE calls, to keep a fan-out invocation cheap:
  *   tickers (price, chg1h via prevPrice1h, chg24h, funding, OI level)
+ *   1H klines x200  (volatility-regime baseline)
  *   4H klines x200  (EMA34 / equilibrium / FVG / mode)
  *   1D klines x2    (PDH/PDL — keeps the forming candle)
  *   OI history      (oiD1h / oiD4h)
  */
 export async function bybitCore(sym, now, j) {
   const S = sym.bybit;
-  const [tick, k4, kd, oiH] = await Promise.all([
+  const [tick, k1, k4, kd, oiH] = await Promise.all([
     j(`${B}/v5/market/tickers?category=linear&symbol=${S}`),
+    // FIVE calls now. 1H x200 is the volatility-regime baseline (regime.js).
+    // 200 is what the OKX fallback can serve in one call, so both venues match.
+    j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=60&limit=200`),
     j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=240&limit=200`),
     j(`${B}/v5/market/kline?category=linear&symbol=${S}&interval=D&limit=2`),
     // NON-FATAL. Bybit serves open-interest from a CloudFront distribution that
@@ -32,6 +36,8 @@ export async function bybitCore(sym, now, j) {
   const mark = +t.lastPrice;
 
   const bars4h = normalizeKlines(k4.result.list, INTERVAL_4H, now);
+  // Forming bar DROPPED: regime ranks the last bar that actually closed.
+  const bars1h = normalizeKlines(k1.result.list, INTERVAL_1H, now);
   // Daily KEEPS the forming candle: today's running high/low is the sweep.
   const days = normalizeKlines(kd.result.list, INTERVAL_1D, now, false);
   const today = days.at(-1) ?? null;
@@ -54,7 +60,7 @@ export async function bybitCore(sym, now, j) {
     oiD1h: Number.isFinite(oi1h) && oi1h ? (oiNow / oi1h - 1) * 100 : 0,
     oiD4h: Number.isFinite(oi4h) && oi4h ? (oiNow / oi4h - 1) * 100 : 0,
     oiMissing: oiL.length === 0,
-    bars4h, prevDay, today,
+    bars4h, bars1h, prevDay, today,
   };
 }
 
