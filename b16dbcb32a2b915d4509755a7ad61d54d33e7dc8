@@ -1,0 +1,24 @@
+docs/superpowers/specs/2026-09-06-movers-screener-design.md
+  d45a5f89ff4c098c 1-229
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "b16dbcb32a2b915d4509755a7ad61d54d33e7dc8",
+  "prompts": {
+    "d45a5f89ff4c098c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b6859fa-45ca-4904-96dd-959089382b6e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 229,
+      "total_deletions": 0,
+      "accepted_lines": 229,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/dc4a852416417bf7a0c7156e4dce8fb6519d5a67f7d1050a12c98a9d05a9ee5f"
+    }
+  }
+}
