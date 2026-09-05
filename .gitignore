@@ -9,3 +9,6 @@ node_modules/
 
 # Env / secrets
 .env
+
+# SDD scratch (briefs, reports, review packages)
+.superpowers/
