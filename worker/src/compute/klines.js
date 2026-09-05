@@ -35,3 +35,17 @@ export function normalizeKlines(list, intervalMs, now, dropUnclosed = true) {
   }
   return bars;
 }
+
+/**
+ * The most recently CLOSED bar's own open->close % return — the price move
+ * across exactly the window a venue's hourly OI-history endpoint reports
+ * (both round to the same clock-hour boundary). Distinct from a rolling
+ * trailing-window change, which answers "how much has price moved in the
+ * last N minutes ending now": this answers "how much did it move over the
+ * same window OI is measured against", and the two drift up to a full bar
+ * apart near the boundary. Returns null when there is no usable closed bar.
+ */
+export function lastClosedBarChangePct(bars) {
+  const b = bars?.at(-1);
+  return b && b.o ? (b.c / b.o - 1) * 100 : null;
+}

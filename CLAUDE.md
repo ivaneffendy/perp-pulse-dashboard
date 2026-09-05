@@ -173,6 +173,17 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   Price-down + OI-up (*fresh shorts*) and price-up + OI-down (*short covering*)
   render as badges but score `0` rather than inventing signs the playbook never
   assigned.
+- **Layer 3 scores off the last CLOSED 1H bar's own return, not the live
+  rolling one.** `price.chg1h` (the "1h%" badge next to price, and the figure
+  `verdict()` reads) is a trailing-60min number that keeps moving as the clock
+  does. `oiD1h` is bucketed to the venue's clock-hour boundary and does not.
+  Feeding the rolling figure into layer 3 against the bucketed one drifts the
+  two windows up to ~55min apart near the top of the hour — CONFIRMED
+  2026-09-05 against live Bybit data. Layer 3 alone uses
+  `lastClosedBarChangePct(c.bars1h)` in `index.js`, which shares oiD1h's exact
+  window; the display badge and verdict() keep the rolling figure, since a
+  "1h%" that only updates once an hour would read stale on the one thing
+  meant to look live.
 - **ETF flow is a BTC-macro layer proxied onto alts**, tagged `proxy` in the UI.
   It never differentiates between assets. Inherent to the spec.
 - **PDH/PDL day boundary is UTC**, not WIB — 7h off from the owner's local day.

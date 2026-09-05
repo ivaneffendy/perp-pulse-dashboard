@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeKlines, INTERVAL_4H } from '../src/compute/klines.js';
+import { normalizeKlines, INTERVAL_4H, lastClosedBarChangePct } from '../src/compute/klines.js';
 
 // Bybit rows are [startTime, open, high, low, close, volume, turnover] as
 // strings, NEWEST FIRST. t=8h is still forming when now = 10h.
@@ -37,4 +37,15 @@ test('coerces strings to finite numbers', () => {
 test('returns an empty array for junk input', () => {
   assert.deepEqual(normalizeKlines(null, INTERVAL_4H, 0), []);
   assert.deepEqual(normalizeKlines([], INTERVAL_4H, 0), []);
+});
+
+test('lastClosedBarChangePct reads the last bar\'s own open->close return', () => {
+  const bars = [{ t: 0, o: 100, h: 101, l: 99, c: 100 }, { t: H, o: 4, h: 10, l: 4, c: 5 }];
+  assert.equal(lastClosedBarChangePct(bars), 25);
+});
+
+test('lastClosedBarChangePct is null with no bars or an unusable open', () => {
+  assert.equal(lastClosedBarChangePct([]), null);
+  assert.equal(lastClosedBarChangePct(undefined), null);
+  assert.equal(lastClosedBarChangePct([{ t: 0, o: 0, h: 1, l: 0, c: 1 }]), null);
 });
