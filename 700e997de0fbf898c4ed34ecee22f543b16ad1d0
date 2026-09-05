@@ -1,0 +1,30 @@
+CLAUDE.md
+  2be8efad06dc550f 21,189-201,238
+worker/test/klines.test.js
+  2be8efad06dc550f 3-5,55-88
+worker/src/sources/bybit.js
+  2be8efad06dc550f 1-2,12-21,23,27-28,39,46-48
+worker/src/compute/klines.js
+  2be8efad06dc550f 52-86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "700e997de0fbf898c4ed34ecee22f543b16ad1d0",
+  "prompts": {
+    "2be8efad06dc550f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "11933593-7b60-479c-9787-bf1e55c89a62",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 108,
+      "total_deletions": 20,
+      "accepted_lines": 107,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/f3556c5623d336570f7a5ceb57155b0446db34a9b8be60fddd03d31efdc37c1e"
+    }
+  }
+}
