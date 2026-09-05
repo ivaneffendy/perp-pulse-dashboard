@@ -2,9 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PAIRS, DEFAULT_WATCHLIST, resolvePair } from '../src/pairs.js';
 
-test('defaults to the playbook section II watchlist', () => {
-  assert.deepEqual(DEFAULT_WATCHLIST,
-    ['BTC', 'ETH', 'SOL', 'NEAR', 'SUI', 'AVAX', 'LINK', 'ARB']);
+test('defaults to the BTC/ETH/SOL anchor set', () => {
+  assert.deepEqual(DEFAULT_WATCHLIST, ['BTC', 'ETH', 'SOL']);
 });
 
 test('every default watchlist entry exists in the known set', () => {

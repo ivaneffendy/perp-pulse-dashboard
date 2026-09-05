@@ -3,8 +3,11 @@
  * PAIRS is no longer a gate — it is the set whose venue coverage has actually
  * been VERIFIED. Anything else resolves too, flagged `known: false`.
  *
- * DEFAULT_WATCHLIST is playbook §II's fixed eight. The wider known set exists
- * because the trade journal shows real rotation (HYPE, WLD, RENDER, ZEC, ONDO).
+ * DEFAULT_WATCHLIST is the always-on anchor set (BTC/ETH/SOL) shown with zero
+ * setup. The rest of playbook §II's eight (NEAR/SUI/AVAX/LINK/ARB) and the
+ * wider known set below are one lookup away rather than pre-loaded — the
+ * trade journal shows real rotation (HYPE, WLD, RENDER, ZEC, ONDO) that a
+ * longer fixed list can't predict anyway.
  *
  * Venue coverage verified 2026-08-19: every base below exists on BOTH Bybit
  * linear (829 symbols) and OKX SWAP (452 instruments). A future listing that
@@ -26,7 +29,7 @@ export const PAIRS = Object.fromEntries([
   'XRP', 'BNB', 'DOGE', 'ADA',
 ].map((b) => [b, mk(b)]));
 
-export const DEFAULT_WATCHLIST = ['BTC', 'ETH', 'SOL', 'NEAR', 'SUI', 'AVAX', 'LINK', 'ARB'];
+export const DEFAULT_WATCHLIST = ['BTC', 'ETH', 'SOL'];
 
 /**
  * What may be interpolated into an upstream URL. Deliberately narrow: no

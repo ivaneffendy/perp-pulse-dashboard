@@ -95,11 +95,12 @@ assigns no volatility row, and `worker/test/regime.test.js` asserts by source
 inspection that `score.js`, `verdict.js` and `absorption.js` never mention it.
 
 ## Pairs
-`DEFAULT_WATCHLIST` is playbook §II's fixed eight: BTC, ETH, SOL, NEAR, SUI,
-AVAX, LINK, ARB. `PAIRS` is wider (adds HYPE, WLD, RENDER, ZEC, ONDO, ASTER,
-JTO, XRP, BNB, DOGE, ADA) because the trade journal shows real rotation into
-coins outside §II. All 19 bases verified present on both Bybit linear and OKX
-SWAP (2026-08-19).
+`DEFAULT_WATCHLIST` is just the always-on anchors: BTC, ETH, SOL. The rest of
+playbook §II's eight (NEAR, SUI, AVAX, LINK, ARB) still resolve and are still
+`known`, they just aren't pre-loaded — type the ticker to pull one in. `PAIRS`
+is wider still (adds HYPE, WLD, RENDER, ZEC, ONDO, ASTER, JTO, XRP, BNB, DOGE,
+ADA) because the trade journal shows real rotation into coins outside §II. All
+19 bases verified present on both Bybit linear and OKX SWAP (2026-08-19).
 
 **`PAIRS` is no longer a gate — it is the verified set.** Any base matching
 `VALID_BASE` (`/^[A-Z0-9]{2,15}$/`) resolves, tagged `known: false` and badged
@@ -119,7 +120,8 @@ plain `Not listed on Bybit or OKX`, with the raw upstream text moved to
 The watchlist is editable from the page: type a ticker to look it up (an
 unpinned, dashed row held in memory — survives Refresh, not a reload), `+ pin`
 to persist it to `localStorage.ppd_watchlist`, `✕` to remove any row including
-the §II eight, and Reset to restore them. `?watchlist=BTC,HYPE,...` still works.
+the anchors, and Reset to restore BTC/ETH/SOL. `?watchlist=BTC,HYPE,...` still
+works.
 
 OI and wall sizes are in the **base coin**, so the page formats units per symbol
 (thousands of BTC vs billions of DOGE).

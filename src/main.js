@@ -4,8 +4,9 @@ import { renderDetail } from './detail.js';
 import { renderWeather, initEtfToggle, fetchDominance } from './weather.js';
 import { enrichBinance } from './binance-enrich.js';
 
-// Playbook §II's fixed eight. Override with ?watchlist=BTC,HYPE,... (persisted).
-const DEFAULT_WATCHLIST = ['BTC', 'ETH', 'SOL', 'NEAR', 'SUI', 'AVAX', 'LINK', 'ARB'];
+// Always-on anchors; the rest of playbook §II is one lookup away, not pre-loaded.
+// Override with ?watchlist=BTC,HYPE,... (persisted).
+const DEFAULT_WATCHLIST = ['BTC', 'ETH', 'SOL'];
 const REFRESH_MS = 5 * 60 * 1000;
 const STALE_MS = 10 * 60 * 1000;
 // Returning to the tab must NOT trigger a full fetch every time. Each refresh
