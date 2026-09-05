@@ -66,7 +66,7 @@ worker/src/
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (108 tests)
+worker/test/        node --test suites (107 tests)
 ```
 
 Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
