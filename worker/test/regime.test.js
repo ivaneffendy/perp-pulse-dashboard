@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { regime, REGIME } from '../src/compute/regime.js';
 
 const H1 = 60 * 60 * 1000;
@@ -101,4 +102,51 @@ test('a caller that passes a FORMING bar is detectable, not silently wrong', () 
   bars.push({ t, o: 100, h: 101, l: 99, c: 100 });
   const r = regime(bars, { now: t + 5 * 60 * 1000, intervalMs: H1 });
   assert.ok(r.barAgeMs < 0, 'a forming bar must surface as a negative age');
+});
+
+const GOLDEN = JSON.parse(
+  readFileSync(new URL('./fixtures/regime-golden.json', import.meta.url), 'utf8'),
+);
+
+/**
+ * Pinned from real BTC 1H bars. These are calibration values, not arithmetic:
+ * they change only if the ranking rule changes, which is exactly what this
+ * guards. Percentiles are (bars strictly narrower / 180) * 100, so every value
+ * is a multiple of 1/1.8 ≈ 0.5555.
+ */
+const EXPECTED = {
+  'cascade following an unscheduled policy announcement, +3h': { pct: 100.0, rangePct: 11.476 },
+  'deleveraging cascade': { pct: 97.8, rangePct: 3.428 },
+  'mid-session expansion': { pct: 77.8, rangePct: 1.224 },
+  'session-open expansion': { pct: 97.2, rangePct: 0.795 },
+  'US session, ~3h after a tier-1 macro release': { pct: 94.4, rangePct: 1.149 },
+};
+
+test('golden fixture: every case has a full 181-bar window', () => {
+  assert.equal(GOLDEN.length, 5);
+  for (const g of GOLDEN) assert.equal(g.bars.length, REGIME.lookback + 1);
+});
+
+test('golden fixture: pinned percentiles reproduce', () => {
+  for (const g of GOLDEN) {
+    const now = g.judgedBarOpensAt + H1 + 1;
+    const r = regime(g.bars, { now, intervalMs: H1 });
+    const want = EXPECTED[g.label];
+    assert.ok(want, `no pinned value for "${g.label}"`);
+    assert.equal(Math.round(r.pct * 10) / 10, want.pct, `pct for ${g.label}`);
+    assert.equal(Math.round(r.rangePct * 1000) / 1000, want.rangePct, `range for ${g.label}`);
+  }
+});
+
+test('golden fixture: the display cut separates disturbed from ordinary tape', () => {
+  const pcts = Object.fromEntries(
+    GOLDEN.map((g) => [g.label, regime(g.bars, {
+      now: g.judgedBarOpensAt + H1 + 1, intervalMs: H1,
+    }).pct]),
+  );
+  const over = Object.values(pcts).filter((p) => p >= 90).length;
+  // Four of the five real extremes clear the display cut; the fifth is a
+  // deliberate negative — an ordinary expansion that must NOT light the chip.
+  assert.equal(over, 4);
+  assert.ok(pcts['mid-session expansion'] < 90);
 });
