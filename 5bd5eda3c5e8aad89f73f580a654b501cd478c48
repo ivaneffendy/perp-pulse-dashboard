@@ -1,0 +1,26 @@
+worker/test/regime.test.js
+  f95f305849729ad5 1-104
+worker/src/compute/regime.js
+  f95f305849729ad5 1-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "5bd5eda3c5e8aad89f73f580a654b501cd478c48",
+  "prompts": {
+    "f95f305849729ad5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "317e2ed2-fb54-460b-b53c-251306c095c3",
+        "model": "claude-opus-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 186,
+      "total_deletions": 0,
+      "accepted_lines": 186,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/cc2a233042cd81a2713ca1d84a50c6f7526c9dc395d9cb1c7d2e84057fae89e6"
+    }
+  }
+}
