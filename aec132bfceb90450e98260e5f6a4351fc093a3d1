@@ -1,0 +1,30 @@
+worker/src/compute/klines.js
+  75ea0ffe5a31920e 38-67
+CLAUDE.md
+  75ea0ffe5a31920e 69,179-191
+worker/test/klines.test.js
+  75ea0ffe5a31920e 3,41-106
+worker/src/sources/okx.js
+  75ea0ffe5a31920e 2,35-38,46-47,57-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "aec132bfceb90450e98260e5f6a4351fc093a3d1",
+  "prompts": {
+    "75ea0ffe5a31920e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c1aab124-7b0c-41ca-89d8-fce52dcf2e6d",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 130,
+      "total_deletions": 17,
+      "accepted_lines": 122,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/8f9c5bb8ce256177b64032e0f35f33bab2593c8873a4e1d103c05c413f0fe23d"
+    }
+  }
+}
