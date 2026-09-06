@@ -66,7 +66,7 @@ worker/src/
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (107 tests)
+worker/test/        node --test suites (114 tests)
 ```
 
 Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
@@ -186,19 +186,24 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   meant to look live.
 - **ETF flow is a BTC-macro layer proxied onto alts**, tagged `proxy` in the UI.
   It never differentiates between assets. Inherent to the spec.
-- **PDH/PDL day boundary is UTC on Bybit**, not WIB — 7h off from the owner's
-  local day. OKX's own daily candles bucket to **UTC+8** instead (confirmed
-  2026-09-06) — an OKX-served row's PDH/PDL therefore uses a different day
-  boundary than a Bybit-served one, not yet reconciled.
-- **Bybit's PDH/PDL is derived from the 1H series, not a dedicated daily
-  call.** Every asset already fetches 200 hourly bars for the volatility-
-  regime baseline (regime.js) — `dailyFromHourly()` re-normalizes that same
-  payload with the forming hour kept and buckets it by UTC calendar day,
-  saving a call that duplicated data already in hand. Deliberately NOT applied
-  to OKX's fallback path: OKX's own hourly bars bucket to UTC midnight same as
-  Bybit's, but deriving OKX's daily bars from them would change OKX's PDH/PDL
-  to the UTC boundary above rather than the UTC+8 one its `bar=1D` endpoint
-  currently uses — a correctness decision, not an efficiency one.
+- **PDH/PDL day boundary is UTC on both venues**, not WIB — 7h off from the
+  owner's local day. Neither venue's native daily-candle endpoint is fetched
+  directly anymore; see the next two bullets for why.
+- **Bybit's `interval=D` daily candles are UTC-midnight-aligned**, so its
+  PDH/PDL is derived from the 1H series instead purely to save a call: every
+  asset already fetches 200 hourly bars for the volatility-regime baseline
+  (regime.js), and `dailyFromHourly()` (`worker/src/compute/klines.js`)
+  re-normalizes that same payload with the forming hour kept, bucketed by
+  UTC calendar day.
+- **OKX's `bar=1D` candles bucket at UTC+8 (00:00 Singapore) instead** —
+  verified across BTC/ETH/SOL over 5 days, every row opens at
+  `16:00:00.000Z`. Fetching it directly (as the Worker used to) silently gave
+  an OKX-served row a PDH/PDL for a different calendar day than a
+  Bybit-served row at the same moment, invisible in the UI since both render
+  through the same `sweep` badge. OKX's own hourly bars ARE UTC-aligned, so
+  `okxCore()` now derives `today`/`prevDay` via the same `dailyFromHourly()`,
+  never from `bar=1D` — matching Bybit's boundary, and costing one fewer
+  subrequest than the dedicated daily fetch it replaces.
 - **Two series deliberately keep their unclosed candle** — the daily (today's
   running high/low *is* the sweep) and the 15m LTF read (the tap being judged is
   happening right now). Every other series drops it. Keeping it forces the
