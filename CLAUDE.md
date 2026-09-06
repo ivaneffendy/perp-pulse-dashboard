@@ -18,7 +18,7 @@ It serves **two distinct phases**, and every feature should trace to one:
 ```
 Phone browser (GitHub Pages, static, no build step)
   ├─ GET /macro              ─▶ Worker ─▶ CoinGecko (dominance), Farside (ETF)
-  ├─ GET /asset?symbol=BTC   ─▶ Worker ─▶ Bybit  (5 calls) + macro (2, cached)
+  ├─ GET /asset?symbol=BTC   ─▶ Worker ─▶ Bybit  (4 calls) + macro (2, cached)
   ├─ GET /asset?symbol=ETH   ─▶ Worker      … one request per watchlist asset,
   │  … fanned out in parallel                  fired concurrently
   ├─ GET /asset?symbol=X&deep=1 ─▶ Worker ─▶ + OKX + Binance + Bybit book (~14)
@@ -66,7 +66,7 @@ worker/src/
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (113 tests)
+worker/test/        node --test suites (114 tests)
 ```
 
 Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
@@ -173,22 +173,37 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   Price-down + OI-up (*fresh shorts*) and price-up + OI-down (*short covering*)
   render as badges but score `0` rather than inventing signs the playbook never
   assigned.
+- **Layer 3 scores off the last CLOSED 1H bar's own return, not the live
+  rolling one.** `price.chg1h` (the "1h%" badge next to price, and the figure
+  `verdict()` reads) is a trailing-60min number that keeps moving as the clock
+  does. `oiD1h` is bucketed to the venue's clock-hour boundary and does not.
+  Feeding the rolling figure into layer 3 against the bucketed one drifts the
+  two windows up to ~55min apart near the top of the hour — CONFIRMED
+  2026-09-05 against live Bybit data. Layer 3 alone uses
+  `lastClosedBarChangePct(c.bars1h)` in `index.js`, which shares oiD1h's exact
+  window; the display badge and verdict() keep the rolling figure, since a
+  "1h%" that only updates once an hour would read stale on the one thing
+  meant to look live.
 - **ETF flow is a BTC-macro layer proxied onto alts**, tagged `proxy` in the UI.
   It never differentiates between assets. Inherent to the spec.
-- **PDH/PDL day boundary is UTC**, not WIB — 7h off from the owner's local day.
-  This is true on both venues, but not for free: see the next bullet.
-- **OKX's native daily candles bucket at UTC+8, not UTC — so `okxCore()` never
-  fetches them.** Verified across BTC/ETH/SOL over 5 days: every `bar=1D` row
-  opens at `16:00:00.000Z` (00:00 Singapore time), while Bybit's `interval=D`
-  opens at exact UTC midnight. The Worker used to fetch OKX's daily candles
-  directly, the same way it does Bybit's — silently giving an OKX-served row a
-  PDH/PDL for a different calendar day than a Bybit-served row would show for
-  the same symbol at the same moment, with no sign of it in the UI (both
-  render through the same `sweep` badge). `okxCore()` now derives
-  `today`/`prevDay` via `dailyFromHourly()` (`worker/src/compute/klines.js`)
-  from the UTC-hour-aligned 1H bars it already fetches for the regime
-  baseline — same UTC bucketing as Bybit, and one fewer subrequest than the
-  dedicated daily fetch it replaces.
+- **PDH/PDL day boundary is UTC on both venues**, not WIB — 7h off from the
+  owner's local day. Neither venue's native daily-candle endpoint is fetched
+  directly anymore; see the next two bullets for why.
+- **Bybit's `interval=D` daily candles are UTC-midnight-aligned**, so its
+  PDH/PDL is derived from the 1H series instead purely to save a call: every
+  asset already fetches 200 hourly bars for the volatility-regime baseline
+  (regime.js), and `dailyFromHourly()` (`worker/src/compute/klines.js`)
+  re-normalizes that same payload with the forming hour kept, bucketed by
+  UTC calendar day.
+- **OKX's `bar=1D` candles bucket at UTC+8 (00:00 Singapore) instead** —
+  verified across BTC/ETH/SOL over 5 days, every row opens at
+  `16:00:00.000Z`. Fetching it directly (as the Worker used to) silently gave
+  an OKX-served row a PDH/PDL for a different calendar day than a
+  Bybit-served row at the same moment, invisible in the UI since both render
+  through the same `sweep` badge. OKX's own hourly bars ARE UTC-aligned, so
+  `okxCore()` now derives `today`/`prevDay` via the same `dailyFromHourly()`,
+  never from `bar=1D` — matching Bybit's boundary, and costing one fewer
+  subrequest than the dedicated daily fetch it replaces.
 - **Two series deliberately keep their unclosed candle** — the daily (today's
   running high/low *is* the sweep) and the 15m LTF read (the tap being judged is
   happening right now). Every other series drops it. Keeping it forces the
@@ -225,7 +240,7 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   old prices as live is the worst failure this tool can have.
 - **Refresh is MANUAL by default — nothing fetches until you press the button.**
   Not boot, not returning to the tab. One refresh = 1 macro + N asset requests
-  (~40 upstream exchange calls at N=8), and the binding constraint is never
+  (~32 upstream exchange calls at N=8), and the binding constraint is never
   Cloudflare (auto at 5 min over an 8h day is ~860 requests, under 1% of the
   100k/day free limit) — it is the exchanges. `?auto=on` (persisted as
   `ppd_auto`) restores the 5-minute timer and the refetch-on-return; under it,

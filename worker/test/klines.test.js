@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeKlines, dailyFromHourly, INTERVAL_4H } from '../src/compute/klines.js';
+import {
+  normalizeKlines, INTERVAL_4H, INTERVAL_1H,
+  lastClosedBarChangePct, dailyFromHourly,
+} from '../src/compute/klines.js';
 
 // Bybit rows are [startTime, open, high, low, close, volume, turnover] as
 // strings, NEWEST FIRST. t=8h is still forming when now = 10h.
@@ -39,68 +42,47 @@ test('returns an empty array for junk input', () => {
   assert.deepEqual(normalizeKlines([], INTERVAL_4H, 0), []);
 });
 
-// dailyFromHourly rebuilds UTC calendar-day bars from already-normalized,
-// oldest-first hourly bars (OKX's native bar=1D buckets at UTC+8 midnight,
-// not UTC — see CLAUDE.md — so its daily PDH/PDL is derived from the
-// UTC-aligned hourly series it already fetches instead of that endpoint).
-const D = 24 * H;
-const bar = (t, o, h, l, c, v) => ({ t, o, h, l, c, v });
+test('lastClosedBarChangePct reads the last bar\'s own open->close return', () => {
+  const bars = [{ t: 0, o: 100, h: 101, l: 99, c: 100 }, { t: H, o: 4, h: 10, l: 4, c: 5 }];
+  assert.equal(lastClosedBarChangePct(bars), 25);
+});
 
-test('groups hourly bars into UTC calendar-day buckets', () => {
-  const hourly = [
-    bar(0, 10, 12, 9, 11, 100),
-    bar(1 * H, 11, 15, 10, 14, 200),
-    bar(2 * H, 14, 14, 8, 9, 150),
-    bar(1 * D, 9, 20, 9, 18, 300),
-    bar(1 * D + 1 * H, 18, 19, 17, 17.5, 50),
+test('lastClosedBarChangePct is null with no bars or an unusable open', () => {
+  assert.equal(lastClosedBarChangePct([]), null);
+  assert.equal(lastClosedBarChangePct(undefined), null);
+  assert.equal(lastClosedBarChangePct([{ t: 0, o: 0, h: 1, l: 0, c: 1 }]), null);
+});
+
+test('dailyFromHourly aggregates hourly bars into UTC-calendar-day highs and lows', () => {
+  const D = INTERVAL_1H * 24;
+  const bars = [
+    { t: 0 * H, o: 100, h: 104, l: 99, c: 103 },       // day 0
+    { t: 1 * H, o: 103, h: 110, l: 101, c: 105 },      // day 0 — sets the day's high
+    { t: D + 0 * H, o: 105, h: 107, l: 104, c: 106 },  // day 1 (today)
+    { t: D + 1 * H, o: 106, h: 109, l: 103, c: 108 },  // day 1, still forming
   ];
-  const days = dailyFromHourly(hourly);
-  assert.deepEqual(days.map((d) => d.t), [0, 1 * D]);
+  const { today, prevDay } = dailyFromHourly(bars);
+  assert.deepEqual(today, { t: D, o: 105, h: 109, l: 103, c: 108 });
+  assert.deepEqual(prevDay, { t: 0, o: 100, h: 110, l: 99, c: 105 });
 });
 
-test('takes open from the day\'s first hour and close from its last', () => {
-  const hourly = [
-    bar(0, 10, 12, 9, 11, 100),
-    bar(1 * H, 11, 15, 10, 14, 200),
-    bar(2 * H, 14, 14, 8, 9, 150),
-    bar(1 * D, 9, 20, 9, 18, 300),
-    bar(1 * D + 1 * H, 18, 19, 17, 17.5, 50),
+test('dailyFromHourly counts a still-forming hour toward today\'s extremes', () => {
+  // This is the whole reason the caller must pass dropUnclosed=false bars: a
+  // forming hour's high can already be today's most extreme print, and the
+  // liquidity-sweep check reads today's high/low as it stands right now.
+  const D = INTERVAL_1H * 24;
+  const bars = [
+    { t: D, o: 100, h: 101, l: 99, c: 100 },
+    { t: D + H, o: 100, h: 150, l: 100, c: 149 }, // forming bar spikes above yesterday-style noise
   ];
-  const [day0, day1] = dailyFromHourly(hourly);
-  assert.deepEqual([day0.o, day0.c], [10, 9]);
-  assert.deepEqual([day1.o, day1.c], [9, 17.5]);
+  const { today } = dailyFromHourly(bars);
+  assert.equal(today.h, 150);
 });
 
-test('takes high as the max and low as the min across the day\'s hours', () => {
-  const hourly = [
-    bar(0, 10, 12, 9, 11, 100),
-    bar(1 * H, 11, 15, 10, 14, 200),
-    bar(2 * H, 14, 14, 8, 9, 150),
-    bar(1 * D, 9, 20, 9, 18, 300),
-    bar(1 * D + 1 * H, 18, 19, 17, 17.5, 50),
-  ];
-  const [day0, day1] = dailyFromHourly(hourly);
-  assert.deepEqual([day0.h, day0.l], [15, 8]);
-  assert.deepEqual([day1.h, day1.l], [20, 9]);
-});
-
-test('sums volume across the day\'s hours', () => {
-  const hourly = [
-    bar(0, 10, 12, 9, 11, 100),
-    bar(1 * H, 11, 15, 10, 14, 200),
-    bar(2 * H, 14, 14, 8, 9, 150),
-    bar(1 * D, 9, 20, 9, 18, 300),
-    bar(1 * D + 1 * H, 18, 19, 17, 17.5, 50),
-  ];
-  const [day0, day1] = dailyFromHourly(hourly);
-  assert.deepEqual([day0.v, day1.v], [450, 350]);
-});
-
-test('a lone hour becomes its own still-forming day bucket', () => {
-  const days = dailyFromHourly([bar(1 * D, 5, 6, 4, 5, 10)]);
-  assert.deepEqual(days, [{ t: 1 * D, o: 5, h: 6, l: 4, c: 5, v: 10 }]);
-});
-
-test('returns an empty array for no hourly bars', () => {
-  assert.deepEqual(dailyFromHourly([]), []);
+test('dailyFromHourly returns nulls for insufficient input', () => {
+  assert.deepEqual(dailyFromHourly([]), { today: null, prevDay: null });
+  assert.deepEqual(dailyFromHourly(null), { today: null, prevDay: null });
+  const { today, prevDay } = dailyFromHourly([{ t: 0, o: 1, h: 2, l: 0, c: 1 }]);
+  assert.ok(today);
+  assert.equal(prevDay, null);
 });

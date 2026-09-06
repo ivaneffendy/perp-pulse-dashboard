@@ -11,7 +11,7 @@ import { resolvePair } from './pairs.js';
 import { bybitCore, bybitDeep, bybitLtf } from './sources/bybit.js';
 import { okxExtras, okxCore, okxOpenInterest, okxLtf } from './sources/okx.js';
 import { absorption } from './compute/absorption.js';
-import { INTERVAL_15M, INTERVAL_1H } from './compute/klines.js';
+import { INTERVAL_15M, INTERVAL_1H, lastClosedBarChangePct } from './compute/klines.js';
 import { binanceExtras } from './sources/binance.js';
 import { fetchMacro } from './sources/macro.js';
 import { computeWalls } from './compute/walls.js';
@@ -134,7 +134,7 @@ function etfFromParam(raw) {
   return Number.isFinite(n) ? n : undefined;
 }
 
-async function handleAsset(url) {
+export async function handleAsset(url) {
   const now = Date.now();
   const sym = resolvePair(url.searchParams.get('symbol') || 'BTC');
   if (!sym) return badSymbol(url);
@@ -162,7 +162,9 @@ async function handleAsset(url) {
       // simply not listed — not an outage. Saying "no core source reachable"
       // with a raw upstream TypeError attached is a developer's message shown
       // to someone who just mistyped a ticker. Keep the technical text, but
-      // under a key the page does not surface.
+      // under a key the page does not surface: `detail` is what api.js prefers
+      // and renders on the row, so it must never hold the raw upstream dump —
+      // that stays under `upstream` alone, for `?debug=1` / network-tab use.
       const upstream = `bybit: ${coreErr} | okx: ${alt.err}`;
       const notListed = !sym.known;
       return json({
@@ -170,7 +172,6 @@ async function handleAsset(url) {
         // No need to repeat the ticker — `symbol` is right there, and the page
         // renders this next to it.
         error: notListed ? 'Not listed on Bybit or OKX' : 'No core source reachable',
-        ...(notListed ? {} : { detail: upstream }),
         upstream,
       }, 502);
     }
@@ -209,9 +210,18 @@ async function handleAsset(url) {
   // below, nor to verdict(), nor to absorption(): §VII has no volatility row.
   const reg = regime(c.bars1h, { now, intervalMs: INTERVAL_1H });
 
+  // Layer 3 compares a price change to an OI change over the SAME window.
+  // c.chg1h is a rolling trailing-60min figure — right for the live "1h%"
+  // badge next to the price, and for verdict()'s right-now read below — but
+  // oiD1h is bucketed to the venue's clock-hour boundary, so the two drift up
+  // to ~55min apart near the top of the hour. Score off the last CLOSED 1H
+  // bar's own return instead: it shares oiD1h's exact window. c.chg1h is left
+  // untouched for display and verdict().
+  const chg1hForScore = lastClosedBarChangePct(c.bars1h) ?? c.chg1h;
+
   const score = scoreAsset({
     etfFlow, etfProxy, funding: c.funding,
-    chg1h: c.chg1h, oiD1h: c.oiD1h, emaSide: ema.side, sweep,
+    chg1h: chg1hForScore, oiD1h: c.oiD1h, emaSide: ema.side, sweep,
   });
 
   const payload = {

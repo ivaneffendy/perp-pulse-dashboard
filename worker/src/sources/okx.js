@@ -57,9 +57,7 @@ export async function okxCore(sym, now, j) {
   // NOT OKX's native bar=1D — that buckets at UTC+8 midnight, not UTC (see
   // CLAUDE.md). Rebuilt from the UTC-aligned hourly bars above instead, so
   // PDH/PDL means the same "day" here as it does on a Bybit-served row.
-  const days = dailyFromHourly(h1);
-  const today = days.at(-1) ?? null;
-  const prevDay = days.length > 1 ? days.at(-2) : null;
+  const { today, prevDay } = dailyFromHourly(h1);
 
   const f = fund?.data?.[0];
   // rubik rows are [ts, oi, vol], newest first. Units cancel in the ratios.

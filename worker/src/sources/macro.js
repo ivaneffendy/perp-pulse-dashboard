@@ -5,12 +5,15 @@
  * Dominance MUST NOT enter the score — the PRD is explicit about this and the
  * §VII table has no dominance row.
  *
- * ETF flow is the flakiest input in the whole system. CONFIRMED 2026-08-19:
- * Farside returns HTTP 403 behind a Cloudflare bot challenge ("Just a
- * moment..."), so the scrape yields nothing and layer 1 sits at 0. The parser
- * is kept and unit-tested so that if a readable feed ever appears the wiring
- * is already correct — but in practice the header's manual in/out/flat toggle
- * is the PRIMARY way this layer gets a value, not a fallback.
+ * ETF flow is the flakiest input in the whole system, but it does work.
+ * Farside sits behind a Cloudflare bot challenge ("Just a moment...") that
+ * 403s an ordinary dev-machine curl — but Worker egress passes it cleanly,
+ * CONFIRMED 2026-09-05 via /macro?debug=1 returning a real etfBtc figure with
+ * no parse error. So layer 1 IS live in production; it just cannot be
+ * verified by curling Farside from a laptop, which is what made this look
+ * dead. The header's manual in/out/flat toggle is a FALLBACK for when the
+ * scrape does break (or hasn't posted today's figure yet), not the primary
+ * source.
  *
  * Everything here returns null rather than throwing; score.js treats null as 0.
  */
