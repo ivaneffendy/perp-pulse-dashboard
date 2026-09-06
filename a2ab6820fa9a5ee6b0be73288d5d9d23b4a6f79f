@@ -1,0 +1,26 @@
+worker/test/movers.test.js
+  d45a5f89ff4c098c 1-82
+worker/src/compute/movers.js
+  d45a5f89ff4c098c 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "a2ab6820fa9a5ee6b0be73288d5d9d23b4a6f79f",
+  "prompts": {
+    "d45a5f89ff4c098c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b6859fa-45ca-4904-96dd-959089382b6e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 117,
+      "total_deletions": 0,
+      "accepted_lines": 117,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/1bc20528c9f2b34e57a7f28a6f25b81e72d3d6cd3f6d69cf6e309b05144e4f4b"
+    }
+  }
+}
