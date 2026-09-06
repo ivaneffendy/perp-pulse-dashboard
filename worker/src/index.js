@@ -105,6 +105,23 @@ async function attempt(fn) {
 }
 
 /**
+ * Bybit-primary/OKX-fallback attempt, shared by every route that offers this
+ * exact venue pair (handleLtf, handleMovers — NOT handleAsset, which has its
+ * own differently-shaped fallback: `upstream` vs `detail`, plus "not listed"
+ * branching and a `fellBack` flag the caller needs downstream). On double
+ * failure, `err` names both venues so the 502 body is never ambiguous about
+ * which upstream(s) failed.
+ */
+async function withFallback(bybitFn, okxFn) {
+  let res = await attempt(bybitFn);
+  if (res.ok) return res;
+  const bybitErr = res.err;
+  res = await attempt(okxFn);
+  if (res.ok) return res;
+  return { ok: false, err: `bybit: ${bybitErr} | okx: ${res.err}` };
+}
+
+/**
  * A rejected symbol is refused outright rather than substituted. Serving BTC's
  * numbers under a mistyped name is the one failure a user-typed symbol field
  * must never produce.
@@ -319,17 +336,15 @@ export async function handleLtf(url) {
   const sym = resolvePair(url.searchParams.get('symbol') || 'BTC');
   if (!sym) return badSymbol(url);
 
-  let res = await attempt(() => bybitLtf(sym, now, fetcher(15)));
-  let bybitErr = null;
+  const res = await withFallback(
+    () => bybitLtf(sym, now, fetcher(15)),
+    () => okxLtf(sym, now, fetcher(15)),
+  );
   if (!res.ok) {
-    bybitErr = res.err;
-    res = await attempt(() => okxLtf(sym, now, fetcher(15)));
-    if (!res.ok) {
-      return json({
-        symbol: sym.base, error: 'No venue could serve 15m candles',
-        detail: `bybit: ${bybitErr} | okx: ${res.err}`,
-      }, 502);
-    }
+    return json({
+      symbol: sym.base, error: 'No venue could serve 15m candles',
+      detail: res.err,
+    }, 502);
   }
 
   const { source, bars } = res.val;
@@ -344,17 +359,15 @@ export async function handleLtf(url) {
  */
 export async function handleMovers() {
   const now = Date.now();
-  let res = await attempt(() => bybitTickers(fetcher(30)));
-  let bybitErr = null;
+  const res = await withFallback(
+    () => bybitTickers(fetcher(30)),
+    () => okxTickers(fetcher(30)),
+  );
   if (!res.ok) {
-    bybitErr = res.err;
-    res = await attempt(() => okxTickers(fetcher(30)));
-    if (!res.ok) {
-      return json({
-        ts: now, error: 'No venue could serve market tickers',
-        detail: `bybit: ${bybitErr} | okx: ${res.err}`,
-      }, 502);
-    }
+    return json({
+      ts: now, error: 'No venue could serve market tickers',
+      detail: res.err,
+    }, 502);
   }
   const { source, tickers } = res.val;
   return json({ ts: now, source, items: rankMovers(tickers, MOVERS) });
