@@ -1,0 +1,32 @@
+index.html
+  d45a5f89ff4c098c 27-30,35-41,43,45,47-52,54-59
+src/main.js
+  d45a5f89ff4c098c 1,6,89-104,215,218,221,274-275
+src/movers.js
+  d45a5f89ff4c098c 1-26
+styles.css
+  d45a5f89ff4c098c 144-161
+src/api.js
+  d45a5f89ff4c098c 41-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "d53d93421d2ea3b4f19aac1c1d9785a3efddbb0c",
+  "prompts": {
+    "d45a5f89ff4c098c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b6859fa-45ca-4904-96dd-959089382b6e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 101,
+      "total_deletions": 15,
+      "accepted_lines": 101,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/85c03a4ecb04555876e0d3ddc0db73a32b33e4c11e4ceb4a8bbf213be78b64e5"
+    }
+  }
+}
