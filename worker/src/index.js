@@ -8,8 +8,8 @@
  * happens here instead, and this returns permissive CORS.
  */
 import { resolvePair } from './pairs.js';
-import { bybitCore, bybitDeep, bybitLtf } from './sources/bybit.js';
-import { okxExtras, okxCore, okxOpenInterest, okxLtf } from './sources/okx.js';
+import { bybitCore, bybitDeep, bybitLtf, bybitTickers } from './sources/bybit.js';
+import { okxExtras, okxCore, okxOpenInterest, okxLtf, okxTickers } from './sources/okx.js';
 import { absorption } from './compute/absorption.js';
 import { INTERVAL_15M, INTERVAL_1H, lastClosedBarChangePct } from './compute/klines.js';
 import { binanceExtras } from './sources/binance.js';
@@ -21,6 +21,7 @@ import { nearestUnmitigatedFvg } from './compute/fvg.js';
 import { sweepState } from './compute/sweep.js';
 import { marketMode } from './compute/mode.js';
 import { regime } from './compute/regime.js';
+import { rankMovers, MOVERS } from './compute/movers.js';
 import { scoreAsset } from './score.js';
 import { verdict } from './verdict.js';
 
@@ -336,12 +337,36 @@ export async function handleLtf(url) {
   return json({ ts: now, symbol: sym.base, source, interval: '15m', ...read });
 }
 
+/**
+ * Cross-market movers, awareness-only — see compute/movers.js and CLAUDE.md.
+ * One call regardless of universe size: Bybit's tickers endpoint returns
+ * every symbol's 24h stats at once, unlike every other route here.
+ */
+export async function handleMovers() {
+  const now = Date.now();
+  let res = await attempt(() => bybitTickers(fetcher(30)));
+  let bybitErr = null;
+  if (!res.ok) {
+    bybitErr = res.err;
+    res = await attempt(() => okxTickers(fetcher(30)));
+    if (!res.ok) {
+      return json({
+        ts: now, error: 'No venue could serve market tickers',
+        detail: `bybit: ${bybitErr} | okx: ${res.err}`,
+      }, 502);
+    }
+  }
+  const { source, tickers } = res.val;
+  return json({ ts: now, source, items: rankMovers(tickers, MOVERS) });
+}
+
 export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(request.url);
     if (url.pathname === '/macro') return handleMacro(url);
     if (url.pathname === '/ltf') return handleLtf(url);
+    if (url.pathname === '/movers') return handleMovers();
     return handleAsset(url);
   },
 };

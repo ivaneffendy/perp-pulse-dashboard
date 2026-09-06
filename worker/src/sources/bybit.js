@@ -99,3 +99,24 @@ export async function bybitDeep(sym, j) {
     close4hAgo: closes?.[4] ?? null,
   };
 }
+
+/**
+ * ALL linear USDT tickers in ONE call — for the /movers screener. Unlike
+ * every other function in this file, this scans the whole market rather than
+ * one symbol: Bybit's tickers endpoint returns every listed symbol's 24h
+ * stats in a single response whether `symbol=` is given or not.
+ */
+export async function bybitTickers(j) {
+  const r = await j(`${B}/v5/market/tickers?category=linear`);
+  const list = r?.result?.list ?? [];
+  const tickers = list
+    .filter((t) => t.symbol.endsWith('USDT'))
+    .map((t) => ({
+      base: t.symbol.replace(/USDT$/, ''),
+      pct24h: +t.price24hPcnt * 100,
+      turnover24h: +t.turnover24h,
+    }))
+    .filter((t) => Number.isFinite(t.pct24h) && Number.isFinite(t.turnover24h));
+  if (!tickers.length) throw new Error('Bybit returned no USDT linear tickers');
+  return { source: 'Bybit linear', tickers };
+}

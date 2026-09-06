@@ -136,3 +136,32 @@ export async function okxExtras(sym, j) {
     book,
   };
 }
+
+/**
+ * ALL USDT-margined SWAP tickers in ONE call — /movers fallback when Bybit's
+ * CDN geo-blocks this edge. Two things this endpoint does NOT give directly:
+ *
+ * 1. No 24h %-change field — derived from open24h/last, same arithmetic as
+ *    okxCore() above.
+ * 2. `volCcy24h` is in BASE-COIN units, not USD (confirmed against live data:
+ *    for ETH-USDT-SWAP, vol24h(contracts) / volCcy24h = 10 exactly, OKX's own
+ *    contract multiplier for that instrument). Multiplying by `last` gets USD
+ *    notional, comparable to Bybit's turnover24h.
+ */
+export async function okxTickers(j) {
+  const r = await j(`${O}/api/v5/market/tickers?instType=SWAP`);
+  const list = r?.data ?? [];
+  const tickers = list
+    .filter((t) => t.instId.endsWith('-USDT-SWAP'))
+    .map((t) => {
+      const open = +t.open24h, last = +t.last, volCcy = +t.volCcy24h;
+      return {
+        base: t.instId.replace(/-USDT-SWAP$/, ''),
+        pct24h: open ? (last / open - 1) * 100 : NaN,
+        turnover24h: volCcy * last,
+      };
+    })
+    .filter((t) => Number.isFinite(t.pct24h) && Number.isFinite(t.turnover24h));
+  if (!tickers.length) throw new Error('OKX returned no USDT SWAP tickers');
+  return { source: 'OKX SWAP', tickers };
+}
