@@ -248,6 +248,26 @@
 
 <section>
   <div class="sec-head">
+    <div class="eyebrow">Screen order &#183; 1b</div>
+    <h2>The Movers tab</h2>
+  </div>
+  <p>A second tab beside the main grid. It scans the <strong>whole market</strong>, not just the watchlist, and lists coins moving unusually against Bitcoin over the last 24 hours &#8212; a way to notice a sudden alt rally before anyone mentions it.</p>
+  <p>It is <strong>context only, the same as the top strip</strong> &#8212; nothing in this tab is clickable, scored, or feeds the grid's verdicts. It answers "what's moving?", not "should I trade this?". That second question still goes through the normal watchlist and its own confluence check.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Reading</th><th>Plain meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="num">24h %</td><td>The coin's own price change over the last 24 hours</td></tr>
+        <tr><td class="num">vs BTC</td><td>That change minus Bitcoin's own 24h change &#8212; how much it is outpacing (or lagging) the market's anchor, in percentage points</td></tr>
+        <tr><td class="num">24h volume</td><td>Dollar value traded in the last 24 hours, so a real move can be told apart from a thinly-traded coin drifting on no volume</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Only coins clearing a minimum volume floor appear, so illiquid noise cannot dominate the list. The floor is a first guess and may be retuned over time.</p>
+</section>
+
+<section>
+  <div class="sec-head">
     <div class="eyebrow">Screen order &#183; 2</div>
     <h2>Reading one row</h2>
   </div>

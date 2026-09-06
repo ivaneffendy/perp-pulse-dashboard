@@ -23,6 +23,8 @@ Phone browser (GitHub Pages, static, no build step)
   │  … fanned out in parallel                  fired concurrently
   ├─ GET /asset?symbol=X&deep=1 ─▶ Worker ─▶ + OKX + Binance + Bybit book (~14)
   │    └─ Binance fapi DIRECT from the device (hybrid client-side enrichment)
+  ├─ GET /movers              ─▶ Worker ─▶ Bybit ALL tickers (1 call, OKX fallback)
+  │       └─ awareness-only — rides the same Refresh press, never scored
   └─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
        └─ ON DEMAND ONLY — a button press, never the refresh loop
 ```
@@ -50,10 +52,11 @@ degrade silently to the Bybit/OKX baseline.
 index.html          markup shell only
 styles.css
 src/
-  main.js           boot, manual refresh (opt-in timer), staleness, watchlist
+  main.js           boot, manual refresh (opt-in timer), staleness, watchlist, tabs
   api.js            Worker client: fan-out, 8s timeout, per-asset failure
   matrix.js         Phase 1 grid + score chips
   detail.js         Phase 2 panel
+  movers.js         Movers tab render — awareness-only, no score, no click
   weather.js        BTC.D / USDT.D / TOTAL3 + manual ETF toggle
   format.js         per-symbol price / coin / percent formatters
   binance-enrich.js client-side Binance enrichment
@@ -62,11 +65,11 @@ worker/src/
   pairs.js          allowlist + per-venue symbol mapping
   sources/          bybit · okx · binance · macro   (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
-                    · absorption  (§IV Step 2, /ltf only) · regime
+                    · absorption  (§IV Step 2, /ltf only) · regime · movers
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (114 tests)
+worker/test/        node --test suites (128 tests)
 ```
 
 Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
@@ -93,6 +96,17 @@ reimplement it.
 right now?* It is rendered on its own and never enters the other three — §VII
 assigns no volatility row, and `worker/test/regime.test.js` asserts by source
 inspection that `score.js`, `verdict.js` and `absorption.js` never mention it.
+
+`compute/movers.js` sits OUTSIDE this four-question framework entirely — it is
+not per-asset and not scored, closer to how dominance is display-only. It
+ranks the whole market by relative strength vs BTC for the awareness-only
+Movers tab, and `worker/test/movers.test.js` asserts by source inspection that
+`score.js`, `verdict.js`, `absorption.js` and `regime.js` never mention it.
+This boundary is not just style: `docs/superpowers/specs/2026-09-06-movers-screener-design.md`
+records a documented, data-backed reason from the trading-vault (R7's Kevin
+Sailly addendum measured this exact screening pattern, used as a TRADING
+method, at -13.79R). Read that spec before adding any score, verdict, or
+click-through to a mover row.
 
 ## Pairs
 `DEFAULT_WATCHLIST` is just the always-on anchors: BTC, ETH, SOL. The rest of
@@ -267,6 +281,21 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **`vol` is drawn only at/above the 90th percentile, and 90 is a DISPLAY cut.**
   It hides a chip; no rule keys off it. The full percentile is always in
   `signals.regime.pct`.
+- **The Movers tab's `$10M` turnover floor is a first guess, untuned against
+  data** — see `MOVERS` in `worker/src/compute/movers.js`. It is
+  awareness-only: no score, no click-through, and a permanent test guards it
+  out of the four scoring engines. Do not wire it into `score.js` without
+  re-reading `docs/superpowers/specs/2026-09-06-movers-screener-design.md`
+  first — that boundary exists because of a measured, not theoretical, R7
+  finding.
+- **Movers is a same-day snapshot, not a trend — coincident, same caveat as
+  `regime.js`.** It reports that a coin moved unusually against BTC over the
+  last 24h, never that the move is continuing or reversing. Turnover is also
+  venue-local (Bybit's or OKX's own book), the same caveat the RVOL work
+  already carries. It also does not implement Kevin Sailly's rotation-check
+  step (OTHERS.D vs TOTAL3, "are alts being bid at all") — the weather bar
+  already shows TOTAL3, and reading it that way is left to the trader rather
+  than automated here.
 
 ## Docs
 The **authoritative trading playbook** — the SMC/derivatives method this
