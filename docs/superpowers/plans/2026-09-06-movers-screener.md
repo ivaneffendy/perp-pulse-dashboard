@@ -734,6 +734,19 @@ git commit -m "Add the Movers tab: awareness-only, no score, no click-through"
 - Modify: `CLAUDE.md`
 - Modify: `docs/reading-the-dashboard.html`
 
+**Drift warning:** this repo has other sessions actively merging work into
+`main` concurrently with this plan (confirmed: a Bybit "bulk tickers" refactor
+and an OKX UTC+8 day-boundary fix both landed in `CLAUDE.md`, changing call
+counts and the test-count line, between this plan being written and Task 1
+starting). By the time this task runs, `CLAUDE.md` may have drifted further.
+**Read the current file fresh before editing it — do not assume the "Find"
+blocks below still match verbatim.** Where a "Find" block doesn't match
+exactly, locate the same section by its heading/context (e.g. the
+architecture diagram's code fence, the `## Layout` code block, the "Four
+questions, one codebase" section, the "## Known limits and quirks" list) and
+apply the equivalent change to whatever the current wording actually is,
+rather than blocking on a mismatch.
+
 - [ ] **Step 1: Update the architecture diagram in `CLAUDE.md`**
 
 Find:
@@ -758,7 +771,24 @@ Replace with:
 
 - [ ] **Step 2: Update the Layout section**
 
-Find:
+Read the current `## Layout` code block in `CLAUDE.md` fresh (per the drift
+warning above, do not trust the block quoted below to match verbatim — it is
+a snapshot from when this plan was written). Apply these changes to whatever
+the current text actually is:
+
+1. Under `src/`, add a line for `movers.js` (following the existing
+   alignment style of that block):
+   `  movers.js         Movers tab render — awareness-only, no score, no click`
+   Also append `, tabs` to the end of the existing `main.js` line's
+   description.
+2. Under `worker/src/compute/`, append `· movers` to the list of compute
+   modules (alongside `absorption`, `regime`, etc).
+3. On the `worker/test/` line, run `cd worker && npm test`, read the final
+   `# tests N` line from the output, and set the count in this line to that
+   real number — never copy a number from this plan document.
+
+Reference snapshot (for orientation only, expect the exact surrounding text
+to differ):
 
 ```
 src/
@@ -778,34 +808,8 @@ worker/src/
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (107 tests)
+worker/test/        node --test suites (N tests)
 ```
-
-Replace with (test count updated to whatever `cd worker && npm test` actually reports after Tasks 1–2 — 121 if nothing else changed):
-
-```
-src/
-  main.js           boot, manual refresh (opt-in timer), staleness, watchlist, tabs
-  api.js            Worker client: fan-out, 8s timeout, per-asset failure
-  matrix.js         Phase 1 grid + score chips
-  detail.js         Phase 2 panel
-  weather.js        BTC.D / USDT.D / TOTAL3 + manual ETF toggle
-  movers.js         Movers tab render — awareness-only, no score, no click
-  format.js         per-symbol price / coin / percent formatters
-  binance-enrich.js client-side Binance enrichment
-worker/src/
-  index.js          routing + CORS only — NO market logic
-  pairs.js          allowlist + per-venue symbol mapping
-  sources/          bybit · okx · binance · macro   (fetch + normalize)
-  compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
-                    · absorption  (§IV Step 2, /ltf only) · regime · movers
-  score.js          §VII bias engine        ─┐ four separate questions,
-  verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
-  compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (121 tests)
-```
-
-**Before writing this edit, run `cd worker && npm test` and read the final `# tests N` line — use the real number, not 121 if it differs.**
 
 - [ ] **Step 3: Add a note after the "Four questions, one codebase" section**
 
