@@ -38,6 +38,13 @@ export const fetchMacro = () => get('/macro', {});
 export const fetchLtf = (base) => get('/ltf', { symbol: base });
 
 /**
+ * Awareness-only cross-market screener. Rides the normal manual-refresh
+ * cadence — no separate timer, unlike /ltf which is deliberately excluded
+ * from every automatic path.
+ */
+export const fetchMovers = () => get('/movers', {});
+
+/**
  * Fan out one request per asset. Deliberately NOT a single /matrix call: a
  * Worker invocation is capped at 50 subrequests, and one slow venue must not
  * blank the whole grid. Each row paints as it settles.

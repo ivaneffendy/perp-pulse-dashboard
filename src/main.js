@@ -1,8 +1,9 @@
-import { fetchMatrix, fetchAsset, fetchMacro } from './api.js';
+import { fetchMatrix, fetchAsset, fetchMacro, fetchMovers } from './api.js';
 import { renderRow, sortRows } from './matrix.js';
 import { renderDetail } from './detail.js';
 import { renderWeather, initEtfToggle, fetchDominance } from './weather.js';
 import { enrichBinance } from './binance-enrich.js';
+import { renderMovers } from './movers.js';
 
 // Always-on anchors; the rest of playbook §II is one lookup away, not pre-loaded.
 // Override with ?watchlist=BTC,HYPE,... (persisted).
@@ -83,6 +84,22 @@ function closeDetail() {
   $('detail').hidden = true;
   $('detail').innerHTML = '';
   for (const r of $('matrix').children) r.classList.remove('open');
+}
+
+/**
+ * Pure visibility toggle between Matrix and Movers. Deliberately does not
+ * fetch anything — Movers rides the normal Refresh cadence (see load()), and
+ * a fetch-on-switch would undermine the "manual refresh only" contract the
+ * rest of this file enforces for every other data source.
+ */
+function selectTab(name) {
+  const isMatrix = name === 'matrix';
+  $('view-matrix').hidden = !isMatrix;
+  $('view-movers').hidden = isMatrix;
+  $('tab-matrix').classList.toggle('active', isMatrix);
+  $('tab-movers').classList.toggle('active', !isMatrix);
+  $('tab-matrix').setAttribute('aria-selected', String(isMatrix));
+  $('tab-movers').setAttribute('aria-selected', String(!isMatrix));
 }
 
 async function openDetail(symbol) {
@@ -195,11 +212,13 @@ async function load() {
 
   // Macro first, so its ETF number can be relayed to every asset request.
   // Dominance rides alongside but comes from THIS DEVICE — see weather.js.
-  const [macro, dom] = await Promise.all([
+  const [macro, dom, movers] = await Promise.all([
     fetchMacro().catch(() => null),
     fetchDominance().catch(() => null),
+    fetchMovers().catch(() => null),
   ]);
   renderWeather(macro, dom);
+  renderMovers(movers);
   etf.refresh(macro);
   const manual = etf.get();
   etfValue = manual != null ? manual : (macro?.etfBtc ?? null);
@@ -252,6 +271,8 @@ document.addEventListener('visibilitychange', () => {
   if (Date.now() - lastGood > MIN_REFETCH_MS) load();
 });
 $('refresh').addEventListener('click', () => load());
+$('tab-matrix').addEventListener('click', () => selectTab('matrix'));
+$('tab-movers').addEventListener('click', () => selectTab('movers'));
 
 $('wl-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') lookup(e.target.value);

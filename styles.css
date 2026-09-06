@@ -141,3 +141,21 @@ body.stale-data .matrix{opacity:.45}
   .updating .matrix{animation:pulse .8s ease-in-out infinite}
   @keyframes pulse{50%{opacity:.5}}
 }
+
+/* Tab switch between Matrix and Movers — pure visibility toggle, never fetches. */
+.tabs{display:flex;gap:6px;margin-bottom:12px}
+.tab{flex:1;background:var(--card);border:1px solid var(--border);color:var(--muted);
+  font:inherit;font-size:12px;padding:8px;border-radius:8px;cursor:pointer}
+.tab.active{color:var(--text);border-color:var(--steel)}
+
+/* Movers — awareness only. Unlike .row, nothing here is clickable: no hover
+   state, no cursor:pointer, no left-edge signal color. */
+.movers-note{font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.movers-list{display:flex;flex-direction:column;gap:6px}
+.mover-row{display:flex;align-items:baseline;gap:10px;background:var(--card);
+  border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px}
+.mv-base{font-family:'Space Grotesk',sans-serif;font-weight:700;width:52px;flex:none}
+.mv-pct{font-variant-numeric:tabular-nums;width:64px;flex:none}
+.mv-rel{font-variant-numeric:tabular-nums;color:var(--muted)}
+.mv-vol{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+.movers-empty{font-size:12px;color:var(--muted);padding:12px 0}

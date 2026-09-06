@@ -24,25 +24,39 @@
   <div class="w-item"><span class="w-label">TOTAL3</span><span class="w-val" id="w-total3">—</span></div>
 </div>
 
-<div class="wl-bar">
-  <input id="wl-input" class="wl-input" type="text" inputmode="latin" autocapitalize="characters"
-         autocomplete="off" spellcheck="false" maxlength="15"
-         placeholder="Add a coin — e.g. PEPE" aria-label="Look up a coin by ticker">
-  <button id="wl-reset" class="ghost" title="Restore the playbook §II watchlist">Reset</button>
-</div>
+<nav class="tabs" role="tablist">
+  <button id="tab-matrix" class="tab active" role="tab" aria-selected="true">Matrix</button>
+  <button id="tab-movers" class="tab" role="tab" aria-selected="false">Movers</button>
+</nav>
 
 <div id="stale" class="stale" hidden></div>
 <div id="err" hidden></div>
 
-<main id="matrix" class="matrix"></main>
+<div id="view-matrix">
+  <div class="wl-bar">
+    <input id="wl-input" class="wl-input" type="text" inputmode="latin" autocapitalize="characters"
+           autocomplete="off" spellcheck="false" maxlength="15"
+           placeholder="Add a coin — e.g. PEPE" aria-label="Look up a coin by ticker">
+    <button id="wl-reset" class="ghost" title="Restore the playbook §II watchlist">Reset</button>
+  </div>
 
-<section id="detail" class="detail" hidden></section>
+  <main id="matrix" class="matrix"></main>
 
-<details class="legend">
-  <summary>Sanity check legend</summary>
-  <p><b>Normal pullback 🟢</b> — OI stable or rising (absorption) + funding neutral or negative.</p>
-  <p><b>Aggressive dump 🔴</b> — heavy OI flush (cascade) + funding heavily positive + ETF outflows.</p>
-</details>
+  <section id="detail" class="detail" hidden></section>
+
+  <details class="legend">
+    <summary>Sanity check legend</summary>
+    <p><b>Normal pullback 🟢</b> — OI stable or rising (absorption) + funding neutral or negative.</p>
+    <p><b>Aggressive dump 🔴</b> — heavy OI flush (cascade) + funding heavily positive + ETF outflows.</p>
+  </details>
+</div>
+
+<section id="view-movers" hidden>
+  <p class="movers-note">Awareness only — the whole market, ranked by move vs BTC. Not a score, not clickable, not a signal to trade any of these.</p>
+  <div id="movers-list" class="movers-list">
+    <p class="movers-empty">Press Refresh to load.</p>
+  </div>
+</section>
 
 <footer>
   <span id="src">—</span>
