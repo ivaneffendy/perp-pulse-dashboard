@@ -1,5 +1,5 @@
 import { computeWalls } from '../compute/walls.js';
-import { normalizeKlines, INTERVAL_15M, INTERVAL_1H, INTERVAL_4H, INTERVAL_1D } from '../compute/klines.js';
+import { normalizeKlines, dailyFromHourly, INTERVAL_15M, INTERVAL_1H, INTERVAL_4H } from '../compute/klines.js';
 import { LTF_BARS } from './bybit.js';
 
 const O = 'https://www.okx.com';
@@ -32,18 +32,19 @@ export async function okxLtf(sym, now, j) {
 
 export async function okxCore(sym, now, j) {
   const inst = sym.okxInst, ccy = sym.okxCcy;
-  const [k1h, k4h, kd, fund, oiHist, oiNow] = await Promise.all([
-    // limit 200, not 2: the same candles now serve both the mark price and the
-    // volatility-regime baseline, so this costs no extra subrequest.
+  const [k1h, k4h, fund, oiHist, oiNow] = await Promise.all([
+    // limit 200, not 2: the same candles now serve the mark price, the
+    // volatility-regime baseline, AND today/prevDay below — no extra
+    // subrequest for any of the three.
     j(`${O}/api/v5/market/candles?instId=${inst}&bar=1H&limit=200`),
     j(`${O}/api/v5/market/candles?instId=${inst}&bar=4H&limit=200`),
-    j(`${O}/api/v5/market/candles?instId=${inst}&bar=1D&limit=2`),
     j(`${O}/api/v5/public/funding-rate?instId=${inst}`).catch(() => null),
     j(`${O}/api/v5/rubik/stat/contracts/open-interest-volume?ccy=${ccy}&period=1H`).catch(() => null),
     j(`${O}/api/v5/public/open-interest?instId=${inst}`).catch(() => null),
   ]);
 
-  // Keep the forming 1H bar: its close IS the current traded price.
+  // Keep the forming 1H bar: its close IS the current traded price, and
+  // today's daily bar (below) needs the still-forming hour's running high/low.
   const h1 = normalizeKlines(k1h.data, INTERVAL_1H, now, false);
   if (!h1.length) throw new Error(`OKX has no candles for ${inst}`);
   // Same payload, forming bar dropped — regime ranks only closed bars. No
@@ -53,7 +54,10 @@ export async function okxCore(sym, now, j) {
   const prev1h = h1.length > 1 ? h1.at(-2).c : mark;
 
   const bars4h = normalizeKlines(k4h.data, INTERVAL_4H, now);
-  const days = normalizeKlines(kd.data, INTERVAL_1D, now, false);
+  // NOT OKX's native bar=1D — that buckets at UTC+8 midnight, not UTC (see
+  // CLAUDE.md). Rebuilt from the UTC-aligned hourly bars above instead, so
+  // PDH/PDL means the same "day" here as it does on a Bybit-served row.
+  const days = dailyFromHourly(h1);
   const today = days.at(-1) ?? null;
   const prevDay = days.length > 1 ? days.at(-2) : null;
 

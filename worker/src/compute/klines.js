@@ -35,3 +35,33 @@ export function normalizeKlines(list, intervalMs, now, dropUnclosed = true) {
   }
   return bars;
 }
+
+/**
+ * Rebuilds UTC calendar-day bars from oldest-first hourly bars (the output of
+ * normalizeKlines). Exists because OKX's native `bar=1D` candles bucket at
+ * UTC+8 midnight, not UTC — unlike Bybit's `interval=D`, which is already
+ * UTC-midnight-aligned — so OKX's PDH/PDL is derived from the UTC-aligned
+ * hourly series it fetches anyway, instead of trusting that endpoint. See
+ * CLAUDE.md's "PDH/PDL day boundary" note.
+ *
+ * Assumes hourly bars are sorted oldest-first with no reordering (guaranteed
+ * by normalizeKlines), so each UTC day's hours are contiguous and comparing
+ * only against the last bucket is sufficient. The trailing bucket may still
+ * be forming, mirroring normalizeKlines(..., dropUnclosed = false).
+ */
+export function dailyFromHourly(hourlyBars) {
+  const days = [];
+  for (const b of hourlyBars) {
+    const dayStart = Math.floor(b.t / INTERVAL_1D) * INTERVAL_1D;
+    const last = days.at(-1);
+    if (last && last.t === dayStart) {
+      last.h = Math.max(last.h, b.h);
+      last.l = Math.min(last.l, b.l);
+      last.c = b.c;
+      last.v += b.v;
+    } else {
+      days.push({ t: dayStart, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v });
+    }
+  }
+  return days;
+}
