@@ -115,11 +115,13 @@ const ageLabel = (at) => {
 };
 
 /**
- * ETF flow is score layer 1 and its feed is dead: Farside sits behind a
- * Cloudflare bot challenge (403), so the auto value is almost always null.
- * This toggle is therefore the PRIMARY way the layer gets a value. The choice
- * is sent BACK to the Worker as ?etf=, so scoring still happens server-side in
- * one place rather than being duplicated into the page.
+ * ETF flow is score layer 1. Farside's bot challenge blocks a laptop's own
+ * curl, but the Worker's egress passes it — CONFIRMED 2026-09-05 via
+ * /macro?debug=1 — so the auto value is normally populated. This toggle is a
+ * FALLBACK for when the scrape does break, or when today's figure hasn't
+ * posted yet. The choice is sent BACK to the Worker as ?etf=, so scoring
+ * still happens server-side in one place rather than being duplicated into
+ * the page.
  */
 export function initEtfToggle(onChange) {
   const btn = document.getElementById('etf-toggle');
