@@ -201,6 +201,10 @@ async function lookup(raw) {
 }
 
 async function load() {
+  // Fired independently, not awaited: nothing downstream needs this before
+  // the matrix can start, and /movers being slow must never delay Phase 1.
+  fetchMovers().then(renderMovers, () => renderMovers(null));
+
   const btn = $('refresh');
   btn.disabled = true;
   document.body.classList.add('updating');
@@ -212,13 +216,11 @@ async function load() {
 
   // Macro first, so its ETF number can be relayed to every asset request.
   // Dominance rides alongside but comes from THIS DEVICE — see weather.js.
-  const [macro, dom, movers] = await Promise.all([
+  const [macro, dom] = await Promise.all([
     fetchMacro().catch(() => null),
     fetchDominance().catch(() => null),
-    fetchMovers().catch(() => null),
   ]);
   renderWeather(macro, dom);
-  renderMovers(movers);
   etf.refresh(macro);
   const manual = etf.get();
   etfValue = manual != null ? manual : (macro?.etfBtc ?? null);

@@ -80,3 +80,10 @@ test('movers is never referenced by any of the four scoring engines', () => {
     );
   }
 });
+
+test('the frontend movers module never adds interactivity or imports scoring UI', () => {
+  const src = readFileSync(new URL('../../src/movers.js', import.meta.url), 'utf8');
+  assert.ok(!/addEventListener|onclick/i.test(src), 'src/movers.js must stay non-interactive');
+  assert.ok(!/score|verdict/i.test(src), 'src/movers.js must never render scoring fields');
+  assert.ok(!/from ['"]\.\/(matrix|detail)\.js['"]/.test(src), 'src/movers.js must not import from the scored UI modules');
+});

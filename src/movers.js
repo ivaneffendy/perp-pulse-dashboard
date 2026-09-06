@@ -1,14 +1,14 @@
 import { fmtUsd, fmtPct, signClass } from './format.js';
 
 /**
- * Awareness-only: no click handler, no score, no verdict. Plain rows so this
- * can never be mistaken for a Phase 1/2 read on an off-list coin. `data` is
- * null on a failed fetch — see main.js's load(), which catches the same way
- * it already does for fetchMacro/fetchDominance.
+ * Awareness-only: no click handler, no bias number, no pullback call. Plain
+ * rows so this can never be mistaken for a Phase 1/2 read on an off-list
+ * coin. `data` is null on a failed fetch — see main.js's load(), which
+ * catches the same way it already does for fetchMacro/fetchDominance.
  */
 export function renderMovers(data) {
   const el = document.getElementById('movers-list');
-  if (!data) {
+  if (!data || !Array.isArray(data.items)) {
     el.innerHTML = '<p class="movers-empty">Movers unavailable.</p>';
     return;
   }

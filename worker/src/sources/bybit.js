@@ -1,6 +1,7 @@
 import {
   normalizeKlines, INTERVAL_15M, INTERVAL_1H, INTERVAL_4H, dailyFromHourly,
 } from '../compute/klines.js';
+import { VALID_BASE } from '../pairs.js';
 
 /** lookback(20) + evalBars(3) + headroom, in one call. */
 export const LTF_BARS = 40;
@@ -116,7 +117,7 @@ export async function bybitTickers(j) {
       pct24h: +t.price24hPcnt * 100,
       turnover24h: +t.turnover24h,
     }))
-    .filter((t) => Number.isFinite(t.pct24h) && Number.isFinite(t.turnover24h));
+    .filter((t) => Number.isFinite(t.pct24h) && Number.isFinite(t.turnover24h) && VALID_BASE.test(t.base));
   if (!tickers.length) throw new Error('Bybit returned no USDT linear tickers');
   return { source: 'Bybit linear', tickers };
 }

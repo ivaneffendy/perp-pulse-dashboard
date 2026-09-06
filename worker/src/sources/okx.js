@@ -1,6 +1,7 @@
 import { computeWalls } from '../compute/walls.js';
 import { normalizeKlines, dailyFromHourly, INTERVAL_15M, INTERVAL_1H, INTERVAL_4H } from '../compute/klines.js';
 import { LTF_BARS } from './bybit.js';
+import { VALID_BASE } from '../pairs.js';
 
 const O = 'https://www.okx.com';
 
@@ -161,7 +162,7 @@ export async function okxTickers(j) {
         turnover24h: volCcy * last,
       };
     })
-    .filter((t) => Number.isFinite(t.pct24h) && Number.isFinite(t.turnover24h));
+    .filter((t) => Number.isFinite(t.pct24h) && Number.isFinite(t.turnover24h) && VALID_BASE.test(t.base));
   if (!tickers.length) throw new Error('OKX returned no USDT SWAP tickers');
   return { source: 'OKX SWAP', tickers };
 }

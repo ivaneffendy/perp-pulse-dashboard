@@ -74,3 +74,16 @@ test('CORS headers are present so the page can call it', async () => {
   );
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
 });
+
+test('response item keys are exactly the documented shape, with no score/verdict leakage', async () => {
+  const res = await withFetch(
+    async () => ok({ result: { list: bybitList() } }),
+    () => handleMovers(),
+  );
+  const raw = await res.text();
+  assert.ok(!/score|verdict|layers|bias/i.test(raw), 'movers response must never carry scoring fields');
+  const b = JSON.parse(raw);
+  for (const item of b.items) {
+    assert.deepEqual(Object.keys(item).sort(), ['base', 'pct24h', 'rel', 'turnover24h']);
+  }
+});

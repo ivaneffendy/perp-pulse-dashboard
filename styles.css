@@ -154,7 +154,7 @@ body.stale-data .matrix{opacity:.45}
 .movers-list{display:flex;flex-direction:column;gap:6px}
 .mover-row{display:flex;align-items:baseline;gap:10px;background:var(--card);
   border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px}
-.mv-base{font-family:'Space Grotesk',sans-serif;font-weight:700;width:52px;flex:none}
+.mv-base{font-family:'Space Grotesk',sans-serif;font-weight:700;min-width:52px;flex:none}
 .mv-pct{font-variant-numeric:tabular-nums;width:64px;flex:none}
 .mv-rel{font-variant-numeric:tabular-nums}
 .mv-vol{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}

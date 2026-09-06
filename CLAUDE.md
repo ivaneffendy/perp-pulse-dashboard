@@ -33,7 +33,7 @@ Phone browser (GitHub Pages, static, no build step)
 A Worker invocation is capped at **50 subrequests** on the free plan. One request
 per asset holds each invocation at ~7 regardless of watchlist size, and the
 matrix renders **progressively** — a slow venue on one symbol cannot blank the
-other rows. ~9 requests per refresh; ~900/day against a 100k/day limit.
+other rows. ~10 requests per refresh; ~1000/day against a 100k/day limit.
 
 ### Why the Worker exists (do not remove it)
 The browser cannot call the exchanges directly:
@@ -253,10 +253,11 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **Stale data greys the grid and shows a banner after 10 min.** Silently showing
   old prices as live is the worst failure this tool can have.
 - **Refresh is MANUAL by default — nothing fetches until you press the button.**
-  Not boot, not returning to the tab. One refresh = 1 macro + N asset requests
-  (~32 upstream exchange calls at N=8), and the binding constraint is never
-  Cloudflare (auto at 5 min over an 8h day is ~860 requests, under 1% of the
-  100k/day free limit) — it is the exchanges. `?auto=on` (persisted as
+  Not boot, not returning to the tab. One refresh = 1 macro + 1 movers + N
+  asset requests (~33 upstream exchange calls at N=8), and the binding
+  constraint is never Cloudflare (auto at 5 min over an 8h day is ~860
+  requests, under 1% of the 100k/day free limit) — it is the exchanges.
+  `?auto=on` (persisted as
   `ppd_auto`) restores the 5-minute timer and the refetch-on-return; under it,
   returning to the tab refetches **only if data is older than `MIN_REFETCH_MS`
   (60s)**, because an unguarded `visibilitychange` reload turned ordinary
