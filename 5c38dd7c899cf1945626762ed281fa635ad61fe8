@@ -1,0 +1,24 @@
+docs/superpowers/plans/2026-09-06-movers-screener.md
+  d45a5f89ff4c098c 1-896
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "5c38dd7c899cf1945626762ed281fa635ad61fe8",
+  "prompts": {
+    "d45a5f89ff4c098c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4b6859fa-45ca-4904-96dd-959089382b6e",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 897,
+      "total_deletions": 1,
+      "accepted_lines": 896,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/57d6f8d89159a8a417ad896e2f455c30870fbefe74415dea226c5a1092fe8516"
+    }
+  }
+}
