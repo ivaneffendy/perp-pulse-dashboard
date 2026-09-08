@@ -38,36 +38,49 @@ function ltfBlock(symbol) {
   const wrap = el('div', 'block');
   wrap.append(el('div', 'label', 'LTF trigger (§IV Step 2)'));
 
-  const btn = el('button', 'ghost ltf-btn', 'Check 15m trigger');
+  // Three buttons, two questions. The first asks what the tape is doing NOW;
+  // the other two ask whether the swept extreme was absorbed, which is what
+  // §IV Step 2 actually asks and what survives the wait for Steps 3-5. Trade
+  // #30 is why the second question exists: a correct "Absorbed at the low" at
+  // 07:18 had decayed to "Quiet" by the 08:25 fill, 66 minutes later.
+  const buttons = [
+    { label: 'Check 15m trigger', side: null },
+    { label: 'Was the low bought?', side: 'long' },
+    { label: 'Was the high sold?', side: 'short' },
+  ].map((b) => ({ ...b, node: el('button', 'ghost ltf-btn', b.label) }));
+
   const out = el('div', 'ltf-out');
   let staleTimer = null;
 
   const reset = () => {
     clearTimeout(staleTimer);
-    btn.disabled = false;
-    btn.textContent = 'Check 15m trigger';
+    for (const b of buttons) { b.node.disabled = false; b.node.textContent = b.label; }
   };
 
-  btn.addEventListener('click', async () => {
+  const run = async ({ side, node }) => {
     clearTimeout(staleTimer);
-    btn.disabled = true;
-    btn.textContent = 'Checking…';
+    for (const b of buttons) b.node.disabled = true;
+    node.textContent = 'Checking…';
     out.className = 'ltf-out';
     out.textContent = '';
     try {
-      const r = await fetchLtf(symbol);
+      const r = await fetchLtf(symbol, side);
       out.className = 'ltf-out ' + r.cls;
       out.append(
         el('div', 'ltf-head', r.label),
         el('p', null, r.msg),
         el('div', 'ltf-meta', [
           r.rvol == null ? null : `${r.rvol.toFixed(1)}x avg volume`,
+          // The age is the whole point of an anchored read — never render one
+          // without it, or it reads as a claim about the current bar.
+          r.anchored ? `anchored ${r.barsAgo} bar${r.barsAgo === 1 ? '' : 's'} back` : null,
           `via ${r.source}`,
           new Date(r.ts).toLocaleTimeString(),
         ].filter(Boolean).join(' · ')),
       );
       // Grey out once the read is no longer current, so an old verdict cannot
-      // be mistaken for a live one.
+      // be mistaken for a live one. An anchored read ages too: a newer extreme
+      // can form, and then it is answering about the wrong leg.
       staleTimer = setTimeout(() => {
         out.classList.add('ltf-stale');
         out.append(el('div', 'ltf-meta', 'This read is over 2 minutes old — check again.'));
@@ -78,9 +91,11 @@ function ltfBlock(symbol) {
     } finally {
       reset();
     }
-  });
+  };
 
-  wrap.append(btn, out);
+  for (const b of buttons) b.node.addEventListener('click', () => run(b));
+
+  wrap.append(...buttons.map((b) => b.node), out);
   return wrap;
 }
 

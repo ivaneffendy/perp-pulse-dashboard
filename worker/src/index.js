@@ -336,6 +336,24 @@ export async function handleLtf(url) {
   const sym = resolvePair(url.searchParams.get('symbol') || 'BTC');
   if (!sym) return badSymbol(url);
 
+  // `?side=` switches the question. Without it: "is there a volume event right
+  // now?" — the live read, correct in the minutes around a tap. With it: "was
+  // the sweep absorbed?", anchored to the extreme bar of the recent leg, which
+  // is what §IV Step 2 actually asks and what stays true while Steps 3-5 play
+  // out. An unknown value is refused rather than quietly answered as live:
+  // returning a different question's answer under the caller's own parameter is
+  // the same silent substitution `badSymbol` exists to prevent.
+  const rawSide = url.searchParams.get('side');
+  const anchor = { long: 'low', short: 'high' }[rawSide ?? ''];
+  if (rawSide != null && !anchor) {
+    return json({
+      error: 'Invalid side',
+      detail: `${JSON.stringify(rawSide)} is not a valid side — expected "long" `
+        + '(anchors to the swept low) or "short" (anchors to the swept high). '
+        + 'Omit it for the live read.',
+    }, 400);
+  }
+
   const res = await withFallback(
     () => bybitLtf(sym, now, fetcher(15)),
     () => okxLtf(sym, now, fetcher(15)),
@@ -348,7 +366,7 @@ export async function handleLtf(url) {
   }
 
   const { source, bars } = res.val;
-  const read = absorption(bars, { now, intervalMs: INTERVAL_15M });
+  const read = absorption(bars, { now, intervalMs: INTERVAL_15M, anchor });
   return json({ ts: now, symbol: sym.base, source, interval: '15m', ...read });
 }
 

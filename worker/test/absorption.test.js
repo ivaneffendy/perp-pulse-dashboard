@@ -169,3 +169,117 @@ test('every result carries a human-readable label and message', () => {
   assert.ok(r.label.length > 0);
   assert.ok(r.msg.includes('§IV'));
 });
+
+// ---------------------------------------------------------------- anchoring
+//
+// §IV Step 2 asks "was the sweep that set up this trade absorbed?" — a fact
+// about ONE bar that stays true. The live read answers "is there a volume
+// event right now?", which decays. Both are legitimate; conflating them cost
+// trade #30, where a correct `Absorbed at the low` at 07:18:49 had rolled to
+// `Quiet` by the 08:25 fill, 66 minutes later — the time §IV Steps 3-5 take.
+//
+// Anchored reads are opt-in and must never masquerade as live: CLAUDE.md's
+// "a stale read is worse than none" holds, and is answered by naming the bar
+// and its age rather than by refusing to look back.
+
+/** A sweep bar, then `gap` quiet bars burying it past the live window. */
+function buriedSweep(sweep, gap) {
+  const bars = baseline(ABSORPTION.lookback);
+  const t = ABSORPTION.lookback * M15;
+  bars.push({ ...sweep, t });
+  for (let i = 1; i <= gap; i++) {
+    bars.push({ t: t + i * M15, o: 100, h: 100.2, l: 99.8, c: 100, v: 100 });
+  }
+  return { bars, sweepT: t, now: t + (gap + 1) * M15 + 1 };
+}
+
+test('anchoring to the low reads a sweep the live window has rolled past', () => {
+  const { bars, sweepT, now } = buriedSweep({ o: 102, h: 105, l: 95, c: 104, v: 300 }, 8);
+  const r = absorption(bars, { now, intervalMs: M15, anchor: 'low' });
+  assert.equal(r.cls, 'absorbed');
+  assert.equal(r.side, 1);
+  assert.equal(r.bar.t, sweepT);
+});
+
+test('anchoring to the high reads a bearish sweep the live window has rolled past', () => {
+  const { bars, sweepT, now } = buriedSweep({ o: 98, h: 105, l: 95, c: 96, v: 300 }, 8);
+  const r = absorption(bars, { now, intervalMs: M15, anchor: 'high' });
+  assert.equal(r.cls, 'absorbed');
+  assert.equal(r.side, -1);
+  assert.equal(r.bar.t, sweepT);
+});
+
+test('an anchored read reports how many bars back the sweep was', () => {
+  const { bars, now } = buriedSweep({ o: 102, h: 105, l: 95, c: 104, v: 300 }, 8);
+  const r = absorption(bars, { now, intervalMs: M15, anchor: 'low' });
+  assert.equal(r.barsAgo, 8);
+});
+
+test('an anchored read is flagged anchored so it cannot be read as live', () => {
+  const { bars, now } = buriedSweep({ o: 102, h: 105, l: 95, c: 104, v: 300 }, 8);
+  assert.equal(absorption(bars, { now, intervalMs: M15, anchor: 'low' }).anchored, true);
+  assert.equal(absorption(bars, { now, intervalMs: M15 }).anchored, false);
+});
+
+test('anchoring picks the EXTREME bar, not the loudest one', () => {
+  // The 2026-09-08 BTC shape, and the reason simply widening evalBars is wrong:
+  // a later, louder, irrelevant bar outranks the sweep under rvol ordering.
+  const bars = baseline(ABSORPTION.lookback);
+  const t = ABSORPTION.lookback * M15;
+  bars.push({ t, o: 102, h: 105, l: 95, c: 104, v: 300 });                  // extreme low 95
+  bars.push({ t: t + M15, o: 101, h: 110, l: 99, c: 109.5, v: 5000 });      // louder, higher low
+  for (let i = 2; i <= 6; i++) {
+    bars.push({ t: t + i * M15, o: 100, h: 100.2, l: 99.8, c: 100, v: 100 });
+  }
+  const r = absorption(bars, { now: t + 7 * M15 + 1, intervalMs: M15, anchor: 'low' });
+  assert.equal(r.bar.t, t);
+  assert.equal(r.cls, 'absorbed');
+});
+
+test('the anchor never reaches further back than anchorBars', () => {
+  // Beyond the window the sweep is gone for good — an anchored read is not a
+  // licence to dredge up any old bar that suits the trade.
+  const { bars, now } = buriedSweep({ o: 102, h: 105, l: 95, c: 104, v: 300 },
+                                    ABSORPTION.anchorBars + 2);
+  const r = absorption(bars, { now, intervalMs: M15, anchor: 'low' });
+  assert.equal(r.cls, 'quiet');
+});
+
+test('omitting anchor leaves the live read unchanged', () => {
+  // Guards the existing contract: CLAUDE.md defends the live read deliberately.
+  const { bars, now } = buriedSweep({ o: 102, h: 105, l: 95, c: 104, v: 300 }, 8);
+  assert.equal(absorption(bars, { now, intervalMs: M15 }).cls, 'quiet');
+});
+
+test('an anchored message states the bar age, so the prose cannot read as live', () => {
+  // The payload carries `anchored`/`barsAgo` for the UI, but the message is what
+  // gets read aloud and pasted into the journal. Without the age in the text,
+  // an anchored read is indistinguishable from a live one — which is exactly the
+  // "a stale read is worse than none" failure CLAUDE.md warns about.
+  const { bars, now } = buriedSweep({ o: 102, h: 105, l: 95, c: 104, v: 300 }, 8);
+  const r = absorption(bars, { now, intervalMs: M15, anchor: 'low' });
+  assert.match(r.msg, /2h ago/);
+});
+
+test('the live message says nothing about age', () => {
+  const { bars, now } = withBaseline({ o: 102, h: 105, l: 95, c: 104, v: 300 });
+  assert.doesNotMatch(absorption(bars, { now, intervalMs: M15 }).msg, /ago/);
+});
+
+test('a hot bar failing the geometry is not described as "no spike worth reading"', () => {
+  // The 2026-09-08 BTC sweep: 3.2x volume at the low, but a 48% lower wick
+  // against wickDom 0.55. Volume was emphatically there; the SHAPE is what did
+  // not qualify. Anchoring makes this common — the extreme bar is picked on
+  // price, not volume — and calling it "no spike" hides the exact number needed
+  // to judge whether the thresholds themselves are right.
+  const { bars, now } = buriedSweep({ o: 101, h: 105, l: 95, c: 99, v: 300 }, 5);
+  const r = absorption(bars, { now, intervalMs: M15, anchor: 'low' });
+  assert.equal(r.cls, 'quiet');
+  assert.doesNotMatch(r.msg, /no spike worth reading/);
+  assert.match(r.msg, /3\.0x/);
+});
+
+test('a genuinely quiet bar still reads as no spike', () => {
+  const { bars, now } = withBaseline({ o: 100, h: 105, l: 95, c: 101, v: 100 });
+  assert.match(absorption(bars, { now, intervalMs: M15 }).msg, /no spike worth reading/);
+});

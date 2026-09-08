@@ -34,8 +34,15 @@ export const fetchMacro = () => get('/macro', {});
  * §IV Step 2, on demand only. Never called on a timer or on panel open — a 15m
  * absorption read is only meaningful in the minutes around the POI tap, so a
  * stale one is worse than none.
+ *
+ * `side` switches which question is asked. Omitted: the LIVE read, "is there a
+ * volume event right now?" — the one the staleness rule above is written for.
+ * `'long'` / `'short'`: the ANCHORED read, "was the swept low/high absorbed?",
+ * which is what §IV Step 2 actually asks and stays true while Steps 3-5 play
+ * out. The response carries `anchored` and `barsAgo`, so an anchored answer is
+ * never rendered as a live one.
  */
-export const fetchLtf = (base) => get('/ltf', { symbol: base });
+export const fetchLtf = (base, side = null) => get('/ltf', { symbol: base, side });
 
 /**
  * Awareness-only cross-market screener. Rides the normal manual-refresh

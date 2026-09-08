@@ -108,3 +108,68 @@ test('CORS headers are present so the page can call it', async () => {
   );
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
 });
+
+// ---------------------------------------------------------------- anchoring
+//
+// §IV Steps 3-5 (ChoCh, displacement, pullback) take time, so by the moment an
+// order is placed the sweep is routinely outside the live 3-bar window. Trade
+// #30 is the case: a correct `Absorbed at the low` at 07:18:49 had decayed to
+// `Quiet` by the 08:25 fill. `?side=` asks the anchored question instead.
+
+/** Hot bar at the low, then `gap` quiet bars burying it past the live window. */
+function buriedRows(gap) {
+  const out = [];
+  for (let i = 0; i < BARS; i++) {
+    const t = NOW - (BARS - i) * M15;
+    out.push(i === BARS - 1 - gap
+      ? [t, 102, 105, 95, 104, 300]
+      : [t, 100, 100.2, 99.8, 100, 100]);
+  }
+  return out.reverse().map((r) => r.map(String));
+}
+
+const callSide = (side) =>
+  handleLtf(new URL(`https://w/ltf?symbol=BTC&side=${side}`));
+
+test('?side=long anchors to the low and reads a sweep the live window missed', async () => {
+  const serve = async () => ok({ result: { list: buriedRows(6) } });
+  const live = await withFetch(serve, () => call()).then((r) => r.json());
+  assert.equal(live.cls, 'quiet', 'precondition: the live read has rolled past it');
+
+  const b = await withFetch(serve, () => callSide('long')).then((r) => r.json());
+  assert.equal(b.cls, 'absorbed');
+  assert.equal(b.side, 1);
+  assert.equal(b.anchored, true);
+  assert.equal(b.barsAgo, 6);
+});
+
+test('?side=short anchors to the high', async () => {
+  const rowsHigh = buriedRows(6).map((r) => (Number(r[5]) === 300
+    ? [r[0], '98', '105', '95', '96', '300'] : r));
+  const b = await withFetch(
+    async () => ok({ result: { list: rowsHigh } }),
+    () => callSide('short'),
+  ).then((r) => r.json());
+  assert.equal(b.cls, 'absorbed');
+  assert.equal(b.side, -1);
+  assert.equal(b.anchored, true);
+});
+
+test('omitting side keeps the live read, which CLAUDE.md defends deliberately', async () => {
+  const b = await withFetch(
+    async () => ok({ result: { list: rows({ hot: true }) } }),
+    () => call(),
+  ).then((r) => r.json());
+  assert.equal(b.anchored, false);
+});
+
+test('an unrecognised side is rejected, never silently answered as live', async () => {
+  // Serving the live read under a `side=` the caller asked for would answer a
+  // different question without saying so — the exact confusion this fixes.
+  const res = await withFetch(
+    async () => { throw new Error('no upstream call should be made'); },
+    () => callSide('buy'),
+  );
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).error, 'Invalid side');
+});

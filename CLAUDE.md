@@ -233,6 +233,33 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   around the POI tap, so a stale one is worse than none — it invites acting on a
   dead read of the one thing that is supposed to be live. The page greys the
   block after 2 minutes for the same reason.
+- **`/ltf` answers TWO questions, and `?side=` chooses which.** Without it, the
+  LIVE read: *"is there a volume event right now?"*, scanning `evalBars` (3, ~45
+  min) — the question the staleness rule above is written for. With
+  `?side=long|short`, the ANCHORED read: *"was the swept low/high absorbed?"*,
+  judging the bar that made the extreme within `anchorBars` (12, ~3h). §IV Step 2
+  asks the second one, and it is a fact about **one bar** that does not decay,
+  which is why the anchored answer may legitimately be hours old. Trade #30 is
+  the case that forced this: a correct `Absorbed at the low` at 07:18:49 had
+  rolled to `Quiet` by the 08:25 fill, because §IV Steps 3–5 took 66 minutes.
+  **The stale-read rule is preserved, not weakened** — an anchored result carries
+  `anchored: true` and `barsAgo`, and states its age in the message prose, so it
+  can never be rendered or pasted as a claim about the current bar.
+- **Anchoring is NOT "widen `evalBars`", and that alternative was tested and
+  rejected.** The live scan ranks decisive-over-quiet then by RVOL, so a later,
+  louder, unrelated candle masks the sweep. Verified against BTC 2026-09-08
+  (event 20:30, read 22:36): at `evalBars: 10` it returned `Initiative down —
+  cancel the limit` from a bar two past the low, at the moment the long was
+  correct (77,941 → 78,602). The anchored read picks the extreme by **price**,
+  never by volume.
+- **`Volume, but no clean shape` is a real fourth outcome, not a bug.** Because
+  the anchored bar is chosen on price, it routinely carries genuine volume in a
+  shape matching no §IV Step 2 branch. Reporting that as `Quiet` ("no spike
+  worth reading") would be false — the BTC sweep above is 3.2x average with a
+  48% lower wick against `wickDom 0.55`. It reports the wick and body shares
+  instead. **This is the diagnostic that makes the thresholds auditable**, and
+  they need it: `ABSORPTION` is self-described as *"provisional — reasoned, not
+  fitted to history"* and has never been validated against a labelled sweep.
 - **EMA34 needs 200 bars.** The PRD said 50; that leaves only 16 bars past the
   SMA seed and the layer flips on noise.
 - **FVG definitions in the PRD were inverted.** With oldest-first bars, bullish
