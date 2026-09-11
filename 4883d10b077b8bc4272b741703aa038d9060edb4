@@ -1,0 +1,26 @@
+src/detail.js
+  48ed060e88a015b2 117-118
+src/matrix.js
+  48ed060e88a015b2 96-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "4883d10b077b8bc4272b741703aa038d9060edb4",
+  "prompts": {
+    "48ed060e88a015b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e8819c09-6cec-4311-b173-342d29dc2935",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 2,
+      "accepted_lines": 5,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/76642e62151844cd07cd1f0937491ff603d34095370402ba231865201e2eead2"
+    }
+  }
+}
