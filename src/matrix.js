@@ -93,7 +93,9 @@ export function renderRow(base, result, ctl = null) {
 
   const mid = el('div', 'row-mid');
   mid.append(
-    el('span', null, eq ? `${eq.zone} · ${fmtPct(eq.pctToLow)} above 4H low` : 'no range data'),
+    el('span', null, eq
+      ? `${eq.zone} · ${fmtPct(eq.pctToLow)} above 4H low (${fmtPrice(eq.ll)}–${fmtPrice(eq.hh)})`
+      : 'no range data'),
     el('span', signClass(d.oi.d1h), `OI ${d.oi.d1h >= 0 ? '↑' : '↓'} ${fmtPct(d.oi.d1h)}`),
     // Negative funding is the bullish side, so invert the colour.
     el('span', signClass(-d.funding.rate), `Fund ${d.funding.rate >= 0 ? '↑' : '↓'} ${d.funding.rate.toFixed(4)}%`),

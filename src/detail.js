@@ -114,7 +114,8 @@ export function renderDetail(node, d, onClose) {
     `Bias (§VII) — ${d.score.verdict} ${d.score.total >= 0 ? '+' : ''}${d.score.total}`));
   const eq = d.signals?.equilibrium;
   if (eq) {
-    bias.append(el('p', null, `${eq.zone} · ${eq.pctOfRange.toFixed(0)}% of range`));
+    bias.append(el('p', null,
+      `${eq.zone} · ${eq.pctOfRange.toFixed(0)}% of range (4H L ${fmtPrice(eq.ll)} · H ${fmtPrice(eq.hh)})`));
   }
   const conflict = zoneConflict(d.score.cls, eq);
   if (conflict) {
