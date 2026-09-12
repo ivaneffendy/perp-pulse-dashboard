@@ -1,0 +1,38 @@
+styles.css
+  48ed060e88a015b2 27,31-33,165-187
+CLAUDE.md
+  48ed060e88a015b2 28-31,62,68,72,287-291,336-392
+docs/reading-the-dashboard.html
+  48ed060e88a015b2 247,272-297
+src/main.js
+  48ed060e88a015b2 7-22,45-48,50,72-81,119-125,128-188,255,295-301,341-343,373-384,387,392-396,400
+worker/src/compute/orderblock.js
+  48ed060e88a015b2 1-83
+index.html
+  48ed060e88a015b2 25,31,63-75
+worker/test/orderblock.test.js
+  48ed060e88a015b2 1-98
+src/chart.js
+  48ed060e88a015b2 1-333
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "cafb994d217281cfcb0405e9cc3872dbd3803127",
+  "prompts": {
+    "48ed060e88a015b2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e8819c09-6cec-4311-b173-342d29dc2935",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 881,
+      "total_deletions": 106,
+      "accepted_lines": 793,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/4260a6755465c0192950709954e00167b1e21aff18ce6f362db3bb609d9b5bbc"
+    }
+  }
+}
