@@ -63,6 +63,22 @@ test('missing BTC in the input defaults the baseline to 0', () => {
   assert.equal(out[0].rel, 4); // 4 - 0
 });
 
+test('a capBases set restricts the ranked universe to those bases', () => {
+  const tickers = [
+    t('BTC', 0, 1e9),
+    t('ARB', 20, 50_000_000),   // not in the cap
+    t('SOL', 15, 50_000_000),   // in the cap
+  ];
+  const out = rankMovers(tickers, { floor: 0, top: 8 }, new Set(['SOL']));
+  assert.deepEqual(out.map((x) => x.base), ['SOL']);
+});
+
+test('a null capBases leaves the universe unrestricted (default behavior)', () => {
+  const tickers = [t('BTC', 0, 1e9), t('ARB', 20, 50_000_000)];
+  const out = rankMovers(tickers, { floor: 0, top: 8 }, null);
+  assert.equal(out.some((x) => x.base === 'ARB'), true);
+});
+
 test('the exported MOVERS default matches the documented provisional values', () => {
   assert.equal(MOVERS.floor, 10_000_000);
   assert.equal(MOVERS.top, 8);

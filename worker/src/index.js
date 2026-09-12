@@ -374,8 +374,14 @@ export async function handleLtf(url) {
  * Cross-market movers, awareness-only — see compute/movers.js and CLAUDE.md.
  * One call regardless of universe size: Bybit's tickers endpoint returns
  * every symbol's 24h stats at once, unlike every other route here.
+ *
+ * `?top100=BTC,ETH,...` is an optional cap-rank allowlist. Market-cap data
+ * can't be fetched from the Worker itself — same shared-egress-IP rate-limit
+ * problem as dominance (CLAUDE.md) — so the browser fetches it client-side
+ * (src/marketcap.js) and relays it here, exactly like the `?etf=` override
+ * relays a client-fetched number into the scored asset request.
  */
-export async function handleMovers() {
+export async function handleMovers(url = null) {
   const now = Date.now();
   const res = await withFallback(
     () => bybitTickers(fetcher(30)),
@@ -387,8 +393,10 @@ export async function handleMovers() {
       detail: res.err,
     }, 502);
   }
+  const raw = url?.searchParams.get('top100');
+  const capBases = raw ? new Set(raw.split(',').filter(Boolean)) : null;
   const { source, tickers } = res.val;
-  return json({ ts: now, source, items: rankMovers(tickers, MOVERS) });
+  return json({ ts: now, source, items: rankMovers(tickers, MOVERS, capBases) });
 }
 
 export default {
@@ -397,7 +405,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === '/macro') return handleMacro(url);
     if (url.pathname === '/ltf') return handleLtf(url);
-    if (url.pathname === '/movers') return handleMovers();
+    if (url.pathname === '/movers') return handleMovers(url);
     return handleAsset(url);
   },
 };

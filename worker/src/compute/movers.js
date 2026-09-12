@@ -22,13 +22,19 @@ export const MOVERS = {
 /**
  * @param {{base:string, pct24h:number, turnover24h:number}[]} tickers
  * @param {{floor:number, top:number}} opts
+ * @param {Set<string>|null} capBases - when given, restricts the ranked
+ *   universe to these bases (top-N by market cap, fetched client-side — see
+ *   src/marketcap.js and CLAUDE.md's dominance note for why market-cap data
+ *   is never fetched from the Worker itself). BTC is exempt since it is the
+ *   baseline, not a candidate.
  * @returns {{base:string, pct24h:number, turnover24h:number, rel:number}[]}
  */
-export function rankMovers(tickers, opts = MOVERS) {
+export function rankMovers(tickers, opts = MOVERS, capBases = null) {
   if (!Array.isArray(tickers)) return [];
   const btcPct = tickers.find((x) => x.base === 'BTC')?.pct24h ?? 0;
   return tickers
     .filter((x) => x.base !== 'BTC' && x.turnover24h >= opts.floor)
+    .filter((x) => !capBases || capBases.has(x.base))
     .map((x) => ({ ...x, rel: x.pct24h - btcPct }))
     .sort((a, b) => Math.abs(b.rel) - Math.abs(a.rel))
     .slice(0, opts.top);
