@@ -24,10 +24,13 @@ h1 span{color:var(--steel)}
 .ghost.manual{border-color:var(--steel);color:var(--steel)}
 
 /* Market weather — deliberately muted: context, never signal. */
-.weather{display:flex;gap:14px;padding:8px 12px;margin-bottom:12px;
+.weather{display:flex;flex-wrap:wrap;gap:6px 14px;padding:8px 12px;margin-bottom:12px;
   border:1px dashed var(--border);border-radius:8px;color:var(--muted)}
 .w-item{display:flex;gap:6px;font-size:11px}
 .w-val{color:var(--text);font-variant-numeric:tabular-nums}
+/* Pinned to the right end of the bar — top of the page either way, so a
+   screenshot always carries an unambiguous WIB time with it. */
+.w-time{margin-left:auto}
 
 .stale{background:#3A2A0B;border:1px solid #6B4E12;color:#F5D08A;
   border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:10px;line-height:1.5}
@@ -159,3 +162,26 @@ body.stale-data .matrix{opacity:.45}
 .mv-rel{font-variant-numeric:tabular-nums}
 .mv-vol{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
 .movers-empty{font-size:12px;color:var(--muted);padding:12px 0}
+
+/* Chart tab — a live candlestick read of the exact numbers the matrix row's
+   badges are computed from. No .row-style click affordance: like Movers,
+   the symbol picker is the only interactive surface. */
+.chart-note{font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5}
+.chart-syms{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chart-sym-btn{background:var(--card);border:1px solid var(--border);color:var(--muted);
+  font:inherit;font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;cursor:pointer}
+.chart-sym-btn.active{color:var(--text);border-color:var(--steel)}
+/* A typed-in lookup, not part of the watchlist — same "question being asked,
+   not yet kept" affordance as .row.temp. */
+.chart-sym-btn.temp{border-style:dashed}
+.chart-body{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px}
+.chart-status{font-size:12px;color:var(--muted);padding:20px 0;text-align:center}
+.chart-status.chart-err{color:var(--down)}
+.chart-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.chart-px{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.chart-chg{font-size:13px;font-weight:600}
+.chart-meta{font-size:10.5px;color:var(--muted);margin-left:auto}
+.chart-canvas-wrap{margin:0 -2px}
+.chart-canvas{display:block;width:100%}
+.chart-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chart-legend{font-size:10.5px;color:var(--muted);margin-top:10px;line-height:1.5}

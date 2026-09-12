@@ -22,11 +22,13 @@
   <div class="w-item"><span class="w-label">BTC.D</span><span class="w-val" id="w-btcd">—</span></div>
   <div class="w-item"><span class="w-label">USDT.D</span><span class="w-val" id="w-usdtd">—</span></div>
   <div class="w-item"><span class="w-label">TOTAL3</span><span class="w-val" id="w-total3">—</span></div>
+  <div class="w-item w-time"><span class="w-label">WIB</span><span class="w-val" id="w-wib">—</span></div>
 </div>
 
 <nav class="tabs" role="tablist">
   <button id="tab-matrix" class="tab active" role="tab" aria-selected="true">Matrix</button>
   <button id="tab-movers" class="tab" role="tab" aria-selected="false">Movers</button>
+  <button id="tab-chart" class="tab" role="tab" aria-selected="false">Chart</button>
 </nav>
 
 <div id="stale" class="stale" hidden></div>
@@ -55,6 +57,19 @@
   <p class="movers-note">Awareness only — the whole market, ranked by move vs BTC. Not a score, not clickable, not a signal to trade any of these.</p>
   <div id="movers-list" class="movers-list">
     <p class="movers-empty">Press Refresh to load.</p>
+  </div>
+</section>
+
+<section id="view-chart" hidden>
+  <p class="chart-note">OKX 4H candles run through the dashboard's own equilibrium/FVG/OB/BOS modules — the same logic as the matrix row, but always OKX's candles, so a Bybit-served row can legitimately differ.</p>
+  <div class="wl-bar">
+    <input id="chart-input" class="wl-input" type="text" inputmode="latin" autocapitalize="characters"
+           autocomplete="off" spellcheck="false" maxlength="15"
+           placeholder="View any coin's chart — e.g. PEPE" aria-label="View a coin's chart by ticker">
+  </div>
+  <div id="chart-syms" class="chart-syms"></div>
+  <div id="chart-body" class="chart-body">
+    <p class="chart-status">Press Refresh, then pick a coin above.</p>
   </div>
 </section>
 

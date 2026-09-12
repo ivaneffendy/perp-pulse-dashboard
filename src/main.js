@@ -4,6 +4,22 @@ import { renderDetail } from './detail.js';
 import { renderWeather, initEtfToggle, fetchDominance } from './weather.js';
 import { enrichBinance } from './binance-enrich.js';
 import { renderMovers } from './movers.js';
+import { renderChart, invalidateChartCache } from './chart.js';
+import { VALID_BASE } from '../worker/src/pairs.js';
+
+/**
+ * Deliberately defined here rather than exported from format.js. This page
+ * has no build step and GitHub Pages serves every module with
+ * `cache-control: max-age=600` and no content hash, so for ten minutes after
+ * a deploy a browser can pair a FRESH main.js with a CACHED format.js. A new
+ * cross-module export is the one change that turns that mismatch into a
+ * module SyntaxError, which aborts the whole graph and takes the entire
+ * dashboard down — not just the clock. Adding no new import contract keeps
+ * that impossible.
+ */
+const fmtWib = (ts) => new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+}).format(ts);
 
 // Always-on anchors; the rest of playbook §II is one lookup away, not pre-loaded.
 // Override with ?watchlist=BTC,HYPE,... (persisted).
@@ -26,8 +42,12 @@ if (params.get('watchlist')) {
 if (params.get('auto')) localStorage.setItem('ppd_auto', params.get('auto').toLowerCase());
 const AUTO = (localStorage.getItem('ppd_auto') || 'off') !== 'off';
 
+// Filtered on the way IN, not at each use site: `?watchlist=` is persisted to
+// localStorage verbatim (only uppercased), so without this a crafted link puts
+// arbitrary strings into WATCHLIST — which then reach a `[data-symbol="..."]`
+// selector, an upstream URL, and the chart's own DOM.
 const readSaved = () => (localStorage.getItem('ppd_watchlist') || '')
-  .split(',').map((s) => s.trim()).filter(Boolean);
+  .split(',').map((s) => s.trim()).filter((s) => VALID_BASE.test(s));
 
 // Mutable now that coins can be pinned and removed from the page itself.
 let WATCHLIST = readSaved().length ? readSaved() : [...DEFAULT_WATCHLIST];
@@ -39,7 +59,6 @@ let WATCHLIST = readSaved().length ? readSaved() : [...DEFAULT_WATCHLIST];
  */
 const temp = new Set();
 
-const VALID_BASE = /^[A-Z0-9]{2,15}$/;
 const symbols = () => [...WATCHLIST, ...[...temp].filter((s) => !WATCHLIST.includes(s))];
 
 function saveWatchlist() {
@@ -50,6 +69,16 @@ const $ = (id) => document.getElementById(id);
 let lastGood = 0;
 let openSymbol = null;
 let timer = null;
+let activeTab = 'matrix';
+let chartSymbol = null;
+/**
+ * A typed-in chart-only lookup, separate from WATCHLIST/temp: viewing a
+ * chart should not add a scored Matrix row or spend a Worker call, only
+ * OKX's own candle fetch (see chart.js).
+ */
+let chartExtra = null;
+const chartSymbols = () => (chartExtra && !symbols().includes(chartExtra)
+  ? [chartExtra, ...symbols()] : symbols());
 // Resolved ETF flow for score layer 1: the manual toggle if set, else whatever
 // /macro returned. Fetched ONCE per refresh and relayed to every /asset call —
 // eight assets each pulling macro themselves is a stampede that rate-limits the
@@ -87,19 +116,76 @@ function closeDetail() {
 }
 
 /**
- * Pure visibility toggle between Matrix and Movers. Deliberately does not
- * fetch anything — Movers rides the normal Refresh cadence (see load()), and
- * a fetch-on-switch would undermine the "manual refresh only" contract the
- * rest of this file enforces for every other data source.
+ * Pure visibility toggle between Matrix, Movers and Chart. Deliberately does
+ * not fetch anything on its own for Matrix/Movers — both ride the normal
+ * Refresh cadence (see load()), and a fetch-on-switch would undermine the
+ * "manual refresh only" contract the rest of this file enforces for every
+ * other data source. Chart is the one exception: it is fetched on-demand
+ * (see renderChartTab) because pre-loading candles for a symbol nobody is
+ * looking at would just burn OKX calls for nothing.
  */
 function selectTab(name) {
-  const isMatrix = name === 'matrix';
-  $('view-matrix').hidden = !isMatrix;
-  $('view-movers').hidden = isMatrix;
-  $('tab-matrix').classList.toggle('active', isMatrix);
-  $('tab-movers').classList.toggle('active', !isMatrix);
-  $('tab-matrix').setAttribute('aria-selected', String(isMatrix));
-  $('tab-movers').setAttribute('aria-selected', String(!isMatrix));
+  activeTab = name;
+  $('view-matrix').hidden = name !== 'matrix';
+  $('view-movers').hidden = name !== 'movers';
+  $('view-chart').hidden = name !== 'chart';
+  $('tab-matrix').classList.toggle('active', name === 'matrix');
+  $('tab-movers').classList.toggle('active', name === 'movers');
+  $('tab-chart').classList.toggle('active', name === 'chart');
+  $('tab-matrix').setAttribute('aria-selected', String(name === 'matrix'));
+  $('tab-movers').setAttribute('aria-selected', String(name === 'movers'));
+  $('tab-chart').setAttribute('aria-selected', String(name === 'chart'));
+  if (name === 'chart') renderChartTab();
+}
+
+/** Draw `base`, dropping the result if the selection moved on mid-fetch. */
+function drawChart(base) {
+  renderChart($('chart-body'), base, () => chartSymbol === base && activeTab === 'chart');
+}
+
+/** Symbol picker + chart body for whichever coin is currently selected. */
+function renderChartPicker() {
+  const box = $('chart-syms');
+  box.innerHTML = '';
+  const pinned = symbols();
+  for (const base of chartSymbols()) {
+    const btn = document.createElement('button');
+    btn.className = 'chart-sym-btn'
+      + (base === chartSymbol ? ' active' : '')
+      // Dashed only for a lookup that is genuinely not on the watchlist —
+      // typing a ticker that IS pinned must not make its button look temporary.
+      + (base === chartExtra && !pinned.includes(base) ? ' temp' : '');
+    btn.textContent = base;
+    btn.addEventListener('click', () => {
+      if (base === chartSymbol) return;
+      chartSymbol = base;
+      renderChartPicker();
+      drawChart(base);
+    });
+    box.appendChild(btn);
+  }
+}
+
+function renderChartTab() {
+  const list = chartSymbols();
+  if (!list.length) return;
+  if (!chartSymbol || !list.includes(chartSymbol)) chartSymbol = list[0];
+  renderChartPicker();
+  drawChart(chartSymbol);
+}
+
+/** Typed-in chart-only lookup — validates and swaps the chart, nothing else. */
+function lookupChart(raw) {
+  const base = String(raw || '').trim().toUpperCase();
+  if (!VALID_BASE.test(base)) {
+    showError(`"${raw}" is not a valid ticker — 2-15 letters or digits, e.g. PEPE.`);
+    return;
+  }
+  showError('');
+  chartExtra = base;
+  chartSymbol = base;
+  renderChartPicker();
+  drawChart(base);
 }
 
 async function openDetail(symbol) {
@@ -166,6 +252,7 @@ function repaint() {
   const extra = temp.size ? ` · ${temp.size} unpinned` : '';
   $('src').textContent =
     `${WATCHLIST.length} assets${extra} · ${AUTO ? 'auto 5m' : 'manual only'}`;
+  if (activeTab === 'chart') renderChartTab();
 }
 
 /** Look up a typed coin and drop it in as an unpinned row. */
@@ -204,6 +291,13 @@ async function load() {
   // Fired independently, not awaited: nothing downstream needs this before
   // the matrix can start, and /movers being slow must never delay Phase 1.
   fetchMovers().then(renderMovers, () => renderMovers(null));
+
+  // Chart candles are cached by symbol (see chart.js) so switching symbols or
+  // re-opening the tab never re-asks OKX — only a real Refresh press does.
+  // Only the symbol actually on screen is re-fetched; the rest of the
+  // watchlist's candles are never pulled until someone looks at them.
+  invalidateChartCache();
+  if (activeTab === 'chart') renderChartTab();
 
   const btn = $('refresh');
   btn.disabled = true;
@@ -244,6 +338,9 @@ async function load() {
   if (anyOk) {
     lastGood = Date.now();
     $('ts').textContent = new Date().toLocaleTimeString();
+    // Top-of-page and explicit WIB, not the device's own locale — so a
+    // screenshot means the same thing later, whichever screen took it.
+    $('w-wib').textContent = fmtWib(lastGood);
     const extra = temp.size ? ` · ${temp.size} unpinned` : '';
     $('src').textContent =
       `${WATCHLIST.length} assets${extra} · ${AUTO ? 'auto 5m' : 'manual only'}`;
@@ -273,15 +370,34 @@ document.addEventListener('visibilitychange', () => {
   if (Date.now() - lastGood > MIN_REFETCH_MS) load();
 });
 $('refresh').addEventListener('click', () => load());
+// Canvas pixel dimensions are set at draw time from the container's current
+// width, so an orientation flip or a resize needs a redraw — from cache, no
+// refetch — or the chart keeps whatever size it was first drawn at. Debounced:
+// a window drag fires this dozens of times a second and each pass rebuilds the
+// chart DOM and re-runs the FVG/OB scans.
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (activeTab === 'chart' && chartSymbol) drawChart(chartSymbol);
+  }, 150);
+});
 $('tab-matrix').addEventListener('click', () => selectTab('matrix'));
 $('tab-movers').addEventListener('click', () => selectTab('movers'));
+$('tab-chart').addEventListener('click', () => selectTab('chart'));
 
 $('wl-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') lookup(e.target.value);
 });
+$('chart-input').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  lookupChart(e.target.value);
+  e.target.value = '';
+});
 $('wl-reset').addEventListener('click', () => {
   WATCHLIST = [...DEFAULT_WATCHLIST];
   temp.clear();
+  chartExtra = null;
   saveWatchlist();
   closeDetail();
   $('matrix').innerHTML = '';
