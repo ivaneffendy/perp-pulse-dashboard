@@ -1,4 +1,4 @@
-import { normalizeKlines, INTERVAL_4H } from '../worker/src/compute/klines.js';
+import { WORKER_URL } from './api.js';
 import { equilibrium } from '../worker/src/compute/equilibrium.js';
 import { findFvgs, nearestUnmitigatedFvg } from '../worker/src/compute/fvg.js';
 import { findOrderBlocks, nearestZone } from '../worker/src/compute/orderblock.js';
@@ -12,7 +12,6 @@ import { fmtPrice, fmtPct, signClass } from './format.js';
  * of a second copy of the equilibrium/FVG/BOS logic to drift out of sync.
  */
 
-const OKX = 'https://www.okx.com';
 const TIMEOUT_MS = 8000;
 
 /**
@@ -30,23 +29,33 @@ const COMPUTE_BARS = 90;
 const DISPLAY_BARS = 30;
 
 /**
- * Candles come from OKX DIRECTLY FROM THE BROWSER, the same "user's own
- * network" trick as weather.js's dominance fetch and binance-enrich.js — no
- * Worker involved, so this never touches the 50-subrequest cap.
+ * Candles come through the WORKER, not straight from the device.
+ *
+ * The first version fetched OKX directly, on the reasoning that weather.js's
+ * dominance call already does client-side fetching. That reasoning was wrong:
+ * CoinGecko is not an exchange. Indonesian ISPs block the exchanges outright,
+ * so `fetch('okx.com')` fails from the operator's own network exactly the way
+ * Binance does — the constraint this Worker was built for in the first place.
+ * Verified in production: the weather strip populated while every chart read
+ * returned "Failed to fetch".
+ *
+ * Going through the Worker also fixes a real inconsistency for free: the chart
+ * now shows whichever venue served the row, instead of always OKX.
  */
 async function fetchBars(base) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const r = await fetch(
-      `${OKX}/api/v5/market/candles?instId=${base}-USDT-SWAP&bar=4H&limit=${COMPUTE_BARS}`,
-      { signal: ctrl.signal },
-    );
+    const url = new URL(WORKER_URL);
+    url.pathname = '/candles';
+    url.searchParams.set('symbol', base);
+    url.searchParams.set('limit', String(COMPUTE_BARS));
+    const r = await fetch(url, { signal: ctrl.signal });
     const d = await r.json();
-    if (d.code !== '0' || !d.data?.length) throw new Error(d.msg || `${base} not listed on OKX SWAP`);
-    const bars = normalizeKlines(d.data, INTERVAL_4H, Date.now());
-    if (bars.length < DISPLAY_BARS) throw new Error('too few closed 4H candles');
-    return bars;
+    if (!r.ok || d.error) throw new Error(d.detail || d.error || `HTTP ${r.status}`);
+    if (!d.bars?.length) throw new Error(`no 4H candles for ${base}`);
+    if (d.bars.length < DISPLAY_BARS) throw new Error('too few closed 4H candles');
+    return { bars: d.bars, source: d.source };
   } finally {
     clearTimeout(timer);
   }
@@ -64,10 +73,10 @@ export function invalidateChartCache() { generation += 1; }
 
 async function getBars(base) {
   const hit = cache.get(base);
-  if (hit && hit.gen === generation) return hit.bars;
-  const bars = await fetchBars(base);
-  cache.set(base, { bars, gen: generation });
-  return bars;
+  if (hit && hit.gen === generation) return hit.val;
+  const val = await fetchBars(base);
+  cache.set(base, { val, gen: generation });
+  return val;
 }
 
 /**
@@ -283,9 +292,9 @@ export async function renderChart(container, base, isCurrent = () => true) {
     return;
   }
   status(container, `loading ${base} 4H candles…`);
-  let computeBars;
+  let computeBars, source;
   try {
-    computeBars = await getBars(base);
+    ({ bars: computeBars, source } = await getBars(base));
   } catch (e) {
     // Upstream text (OKX's own `msg`) reaches here, so it is set as text.
     if (isCurrent()) status(container, `${base}: ${e.message}`, true);
@@ -314,7 +323,7 @@ export async function renderChart(container, base, isCurrent = () => true) {
     <div class="chart-head">
       <span class="chart-px">${fmtPrice(price)}</span>
       <span class="chart-chg ${signClass(chg)}">${fmtPct(chg)} 4H</span>
-      <span class="chart-meta">last close · OKX SWAP · ${displayBars.length} shown, ${computeBars.length} scanned</span>
+      <span class="chart-meta">last close · ${source} · ${displayBars.length} shown, ${computeBars.length} scanned</span>
     </div>
     <div class="chart-canvas-wrap"><canvas class="chart-canvas"></canvas></div>
     <div class="chart-badges">
@@ -325,7 +334,7 @@ export async function renderChart(container, base, isCurrent = () => true) {
         ${mode.mode === 'TREND' ? `TREND ${mode.direction > 0 ? '↑' : '↓'}` : 'RANGE'}
       </span>
     </div>
-    <p class="chart-legend">Amber = the <b>rolling 30-bar</b> 4H high/low/EQ — a trailing 5-day extreme, <b>not</b> an anchored swing range, so it will not match a hand-drawn one · triangles = swing fractals · cyan step = the BOS driving TREND · green/red box = nearest unmitigated FVG · dashed steel box = order blocks (OB — provisional: unmitigated + at displacement origin, but it does <b>not</b> verify the move broke structure, and does not skip mid-range zones). Price is the last <b>closed</b> 4H bar, so it can differ from the Matrix row's live mark. FVG/OB are scanned over more history than is drawn, so a box can run off the left edge.</p>
+    <p class="chart-legend">Amber = the <b>rolling 30-bar</b> 4H high/low/EQ — a trailing 5-day extreme, <b>not</b> an anchored swing range, so it will not match a hand-drawn one · triangles = swing fractals · cyan step = the BOS driving TREND · green/red box = nearest unmitigated FVG · dashed steel box = order blocks (OB — provisional: unmitigated + at displacement origin, but it does <b>not</b> verify the move broke structure, and does not skip mid-range zones). Price is the last <b>closed</b> 4H bar, so it can differ from the Matrix row's live mark. FVG/OB are scanned over more history than is drawn, so a box can run off the left edge. Candles come through the Worker, so the venue matches the row.</p>
   `;
   drawCandles(container.querySelector('.chart-canvas'), displayBars, {
     eq, fvg, fvgAll, obs: { all: obAll, nearest: obNearest }, geo, price, offset,

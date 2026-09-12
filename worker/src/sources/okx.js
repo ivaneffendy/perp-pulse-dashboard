@@ -31,6 +31,15 @@ export async function okxLtf(sym, now, j) {
   return { source: 'OKX SWAP', bars };
 }
 
+/** /candles fallback, mirroring okxLtf. Same row order, same normalizer. */
+export async function okxCandles(sym, now, limit, j) {
+  const k = await j(
+    `${O}/api/v5/market/candles?instId=${sym.okxInst}&bar=4H&limit=${limit}`);
+  const bars = normalizeKlines(k.data, INTERVAL_4H, now);
+  if (!bars.length) throw new Error(`OKX has no 4H candles for ${sym.okxInst}`);
+  return { source: 'OKX SWAP', bars };
+}
+
 export async function okxCore(sym, now, j) {
   const inst = sym.okxInst, ccy = sym.okxCcy;
   const [k1h, k4h, fund, oiHist, oiNow] = await Promise.all([
