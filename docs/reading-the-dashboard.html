@@ -244,6 +244,7 @@
     </table>
   </div>
   <p>Beside them is an <strong>ETF button</strong>. It shows how much money flowed into or out of US spot Bitcoin ETFs on the last reported day. Tapping it cycles to a manual setting, for days when the source is unavailable.</p>
+  <p>At the end of the strip is a <strong>WIB clock</strong>. It is not the current time &#8212; it is the moment the numbers on screen were fetched, shown in Jakarta time no matter which device is looking. It only moves when a refresh succeeds, so a screenshot always carries the timestamp of the reading it actually shows.</p>
 </section>
 
 <section>
@@ -264,6 +265,34 @@
     </table>
   </div>
   <p>Only coins clearing a minimum volume floor appear, so illiquid noise cannot dominate the list. The floor is a first guess and may be retuned over time.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">Screen order &#183; 1c</div>
+    <h2>The Chart tab</h2>
+  </div>
+  <p>A third tab that draws the actual candlesticks the row's badges are calculated from. The grid tells you <em>what</em> it concluded; this shows you <em>what it was looking at</em>. Pick a coin with the buttons, or type any ticker to pull up its chart without adding it to the watchlist.</p>
+  <p>Each candle is four hours. Thirty of them are drawn &#8212; about five days &#8212; though the zones below are searched over a longer history, so a box can start off the left edge of the picture.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>What you see</th><th>Plain meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="num">Amber dashed lines</td><td>The highest high and lowest low of the last thirty candles, and the midpoint between them. Above the midpoint is called <em>premium</em>, below it <em>discount</em></td></tr>
+        <tr><td class="num">Green / red box</td><td>A <strong>fair value gap</strong> &#8212; a price area the market jumped straight over without trading properly, and may come back to fill</td></tr>
+        <tr><td class="num">Dashed blue box</td><td>An <strong>order block</strong> &#8212; the last candle going the opposite way before a sharp move began. Often where the move was launched from</td></tr>
+        <tr><td class="num">Small triangles</td><td>Turning points: a candle that is higher (or lower) than the two candles either side of it</td></tr>
+        <tr><td class="num">Blue step marked BOS</td><td>The turning point that price closed decisively beyond. This is what makes the row say <code>TREND</code> instead of <code>RANGE</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>A box only stays drawn while it is <strong>unfilled</strong>. Once price has traded back through the middle of a zone, it is considered used up and disappears.</p>
+
+  <h3>Three things it is honest about, and you should hold onto</h3>
+  <p><strong>The amber lines are not a hand-drawn swing range.</strong> They are simply the highest and lowest point of the last thirty candles, recalculated every candle. That is not the same thing as a range anchored by hand between two structural turning points, and it will not match one. Sometimes a single violent candle <em>is</em> the whole range on its own. Treat these lines as a rough sense of where price sits, never as proof of a valuation zone.</p>
+  <p><strong>The price shown is the last completed candle, not this second's price.</strong> The candle currently forming is left out, because a half-finished candle changes shape constantly. So mid-candle this tab can read differently from the main grid, which shows the live price.</p>
+  <p><strong>The order block is a first attempt, not a verified signal.</strong> It finds a sharp move and marks what came before it, but it does not check whether that move actually broke market structure, and it does not ignore zones sitting in the middle of the range. Both of those matter when judging whether a zone is worth trading. It feeds no score anywhere; it is a drawing aid.</p>
+  <p>This tab reads its candles from one exchange (OKX), while a grid row prefers a different one and only falls back to OKX. The two exchanges do not print identical candles, so small differences between this tab and the row are expected and are not a fault.</p>
 </section>
 
 <section>

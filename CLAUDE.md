@@ -25,8 +25,10 @@ Phone browser (GitHub Pages, static, no build step)
   │    └─ Binance fapi DIRECT from the device (hybrid client-side enrichment)
   ├─ GET /movers              ─▶ Worker ─▶ Bybit ALL tickers (1 call, OKX fallback)
   │       └─ awareness-only — rides the same Refresh press, never scored
-  └─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
-       └─ ON DEMAND ONLY — a button press, never the refresh loop
+  ├─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
+  │    └─ ON DEMAND ONLY — a button press, never the refresh loop
+  └─ Chart tab ─────────────▶ OKX 4H candles DIRECT from the device (no Worker)
+       └─ display-only POI overlay; one symbol at a time, cached per refresh
 ```
 
 ### Why fan out instead of one `/matrix` call
@@ -57,15 +59,17 @@ src/
   matrix.js         Phase 1 grid + score chips
   detail.js         Phase 2 panel
   movers.js         Movers tab render — awareness-only, no score, no click
+  chart.js          Chart tab — 4H candles + POI overlay, OKX direct, no Worker
   weather.js        BTC.D / USDT.D / TOTAL3 + manual ETF toggle
   format.js         per-symbol price / coin / percent formatters
   binance-enrich.js client-side Binance enrichment
 worker/src/
   index.js          routing + CORS only — NO market logic
-  pairs.js          allowlist + per-venue symbol mapping
+  pairs.js          allowlist + per-venue symbol mapping + VALID_BASE
   sources/          bybit · okx · binance · macro   (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
                     · absorption  (§IV Step 2, /ltf only) · regime · movers
+                    · orderblock  (chart overlay only — never scored)
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
@@ -280,7 +284,11 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **Stale data greys the grid and shows a banner after 10 min.** Silently showing
   old prices as live is the worst failure this tool can have.
 - **Refresh is MANUAL by default — nothing fetches until you press the button.**
-  Not boot, not returning to the tab. One refresh = 1 macro + 1 movers + N
+  Not boot, not returning to the tab. **One deliberate exception:** opening the
+  Chart tab, or picking a symbol in it, fetches that ONE symbol's candles
+  on demand, because pre-loading candles for coins nobody is looking at would
+  cost a request per watchlist entry per refresh. They are then cached until
+  the next Refresh press, so flipping tabs or symbols re-asks nothing. One refresh = 1 macro + 1 movers + N
   asset requests (~33 upstream exchange calls at N=8), and the binding
   constraint is never Cloudflare (auto at 5 min over an 8h day is ~860
   requests, under 1% of the 100k/day free limit) — it is the exchanges.
@@ -324,6 +332,63 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   step (OTHERS.D vs TOTAL3, "are alts being bid at all") — the weather bar
   already shows TOTAL3, and reading it that way is left to the trader rather
   than automated here.
+
+- **The Chart tab is an OKX-only read, and it says so.** Every other per-asset
+  number comes through the Worker (Bybit primary, OKX fallback); the chart
+  fetches OKX from the device directly. On a Bybit-served row the same asset's
+  4H high/low, FVG distance and TREND badge can therefore legitimately differ
+  between the Matrix row and the Chart tab. Its header also shows the last
+  CLOSED 4H bar's close, not the live mark the Matrix row shows, because the
+  forming candle is dropped — the two are up to 4h apart mid-bar. Both facts
+  are stated in the tab's own copy rather than left to be discovered.
+- **The browser imports `worker/src/compute/*.js` directly.** `src/chart.js`
+  pulls `klines`, `equilibrium`, `fvg`, `mode`, `orderblock` and `pairs`
+  (`VALID_BASE`) straight out of the Worker tree so there is exactly one copy
+  of each rule, guarded by the existing `worker/test` suites. That makes
+  GitHub Pages serving the `worker/` directory — and therefore `.nojekyll` —
+  **load-bearing for the page**, not just for the Worker.
+- **Do not add a new cross-module export to an existing `src/` module.** There
+  is no build step and Pages serves every file with `cache-control: max-age=600`
+  and no content hash, so for ten minutes after a deploy a browser can pair a
+  FRESH `main.js` with a CACHED `format.js`. A missing export is a module
+  SyntaxError, which aborts the whole graph and blanks the entire dashboard —
+  not just the new feature. Adding a new *file* is safe (it can't be stale);
+  adding an export to an old one is not. This is why `fmtWib` lives in
+  `main.js` instead of the `format.js` shelf it obviously belongs on.
+- **Order blocks are a chart overlay, not a POI ruling.** `compute/orderblock.js`
+  marks the last opposite-colour candle before a displacement leg, unmitigated
+  on fvg.js's own 50%-of-range rule, and mitigation is measured from AFTER the
+  impulse — the impulse bar launches out of the zone by definition, and scanning
+  from the OB bar self-mitigates nearly every block the moment it forms. It
+  implements two of playbook §III.1 Pillar 3's four POI-quality requirements.
+  It does NOT verify the displacement actually broke structure — it tests a
+  close beyond the prior 10 bars, which is a range break, while `mode.js`
+  defines BOS as a body close beyond a prior swing fractal — and it does NOT
+  skip mid-range zones. So it can badge a zone Pillar 3 would score 0. Closing
+  that gap is a playbook question, not a refactor: it is open as R23 in the
+  private playbook repo and must be decided there first.
+- **The "4H high/low" is a rolling 30-bar extreme, NOT an anchored swing range.**
+  `equilibrium()` takes the high/low of the last 30 4H bars, so it re-anchors
+  every bar and a single volatile candle can define the whole range (verified
+  2026-09-12 on BTC: one bar spanning 79,888–75,866 *was* the entire range).
+  The playbook's Pillar 2 means an operator-anchored structural swing range,
+  and the private playbook repo's own design notes are explicit that this
+  dashboard cannot express that pillar. The figures on the row and the chart are
+  a proxy for orientation; they are not Pillar 2 evidence and will not match a
+  hand-drawn range. Open as R22 there — do not "fix" this side first.
+- **A ticker is validated on the way INTO the watchlist, not at each use.**
+  `?watchlist=` is persisted to `localStorage` verbatim (only uppercased), so
+  `readSaved()` filters through `VALID_BASE`. Without it a crafted link put
+  arbitrary strings into `WATCHLIST`, which reached a `[data-symbol="…"]`
+  selector, an upstream URL, and — once the Chart tab existed — `innerHTML`.
+  Confirmed executable before the filter landed. `src/chart.js` re-checks
+  anyway and renders every status/error line with `textContent`, because
+  upstream error text (OKX's own `msg`) also reaches that line.
+- **The WIB clock is stamped from `lastGood`, not from the wall clock.** It
+  reports when the data on screen was fetched, in `Asia/Jakarta` regardless of
+  the device's timezone, so a screenshot of a verdict can be compared against a
+  later one. It deliberately does not tick, and a failed refresh leaves it
+  showing the older time the visible numbers actually belong to.
 
 ## Docs
 The **authoritative trading playbook** — the SMC/derivatives method this
