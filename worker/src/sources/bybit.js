@@ -84,6 +84,24 @@ export async function bybitLtf(sym, now, j) {
   return { source: 'Bybit linear', bars };
 }
 
+/**
+ * /candles only — ONE call, same shape as bybitLtf.
+ *
+ * The Chart tab used to fetch OKX straight from the device. That works from
+ * most networks and NOT from the operator's: Indonesian ISPs block the
+ * exchanges, which is the same reason Binance is unreachable client-side. The
+ * Worker's egress can reach both venues, so the candles come through here —
+ * and as a side effect the chart now draws whatever venue served the matrix
+ * row rather than always OKX.
+ */
+export async function bybitCandles(sym, now, limit, j) {
+  const k = await j(
+    `${B}/v5/market/kline?category=linear&symbol=${sym.bybit}&interval=240&limit=${limit}`);
+  const bars = normalizeKlines(k.result?.list, INTERVAL_4H, now);
+  if (!bars.length) throw new Error(`Bybit has no 4H klines for ${sym.bybit}`);
+  return { source: 'Bybit linear', bars };
+}
+
 /** deep=1 only: book walls, account L/S, and the 4h change for display. */
 export async function bybitDeep(sym, j) {
   const S = sym.bybit;

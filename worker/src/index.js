@@ -8,8 +8,8 @@
  * happens here instead, and this returns permissive CORS.
  */
 import { resolvePair } from './pairs.js';
-import { bybitCore, bybitDeep, bybitLtf, bybitTickers } from './sources/bybit.js';
-import { okxExtras, okxCore, okxOpenInterest, okxLtf, okxTickers } from './sources/okx.js';
+import { bybitCore, bybitDeep, bybitLtf, bybitCandles, bybitTickers } from './sources/bybit.js';
+import { okxExtras, okxCore, okxOpenInterest, okxLtf, okxCandles, okxTickers } from './sources/okx.js';
 import { absorption } from './compute/absorption.js';
 import { INTERVAL_15M, INTERVAL_1H, lastClosedBarChangePct } from './compute/klines.js';
 import { binanceExtras } from './sources/binance.js';
@@ -371,6 +371,43 @@ export async function handleLtf(url) {
 }
 
 /**
+ * Raw 4H candles for the Chart tab. ON DEMAND ONLY, exactly like /ltf: one
+ * upstream call per press, never on the refresh loop.
+ *
+ * This route exists because the browser cannot reach the exchanges — the same
+ * constraint that created this Worker. The Chart tab originally fetched OKX
+ * from the device, which works from many networks but not from Indonesia,
+ * where the ISP blocks the exchanges outright. Routing it here also removes a
+ * real inconsistency: the chart now draws the SAME venue that served the
+ * matrix row, instead of always OKX while the row preferred Bybit.
+ *
+ * Returns bars only. No signal is computed here — equilibrium, FVG, order
+ * blocks and mode are derived in the browser from these bars using the very
+ * same compute modules, so there is one implementation, not two.
+ */
+export async function handleCandles(url) {
+  const now = Date.now();
+  const sym = resolvePair(url.searchParams.get('symbol') || 'BTC');
+  if (!sym) return badSymbol(url);
+
+  const raw = Number(url.searchParams.get('limit'));
+  const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 30), 200) : 90;
+
+  const res = await withFallback(
+    () => bybitCandles(sym, now, limit, fetcher(60)),
+    () => okxCandles(sym, now, limit, fetcher(60)),
+  );
+  if (!res.ok) {
+    return json({
+      symbol: sym.base, error: 'No venue could serve 4H candles',
+      detail: res.err,
+    }, 502);
+  }
+  const { source, bars } = res.val;
+  return json({ ts: now, symbol: sym.base, source, interval: '4H', bars });
+}
+
+/**
  * Cross-market movers, awareness-only — see compute/movers.js and CLAUDE.md.
  * One call regardless of universe size: Bybit's tickers endpoint returns
  * every symbol's 24h stats at once, unlike every other route here.
@@ -397,6 +434,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === '/macro') return handleMacro(url);
     if (url.pathname === '/ltf') return handleLtf(url);
+    if (url.pathname === '/candles') return handleCandles(url);
     if (url.pathname === '/movers') return handleMovers();
     return handleAsset(url);
   },
