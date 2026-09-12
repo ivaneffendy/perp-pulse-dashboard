@@ -1,0 +1,42 @@
+src/api.js
+  cf1305b01657cc28 51-56,58
+worker/test/movers.test.js
+  cf1305b01657cc28 66-81
+worker/src/index.js
+  cf1305b01657cc28 377-382,384,396-397,399,408
+src/marketcap.js
+  cf1305b01657cc28 1-75
+src/main.js
+  cf1305b01657cc28 7,294-300
+index.html
+  cf1305b01657cc28 57
+worker/test/movers-route.test.js
+  cf1305b01657cc28 78-89
+worker/src/compute/movers.js
+  cf1305b01657cc28 25-29,32,37
+CLAUDE.md
+  cf1305b01657cc28 62,336-348
+.claude/launch.json
+  cf1305b01657cc28 9-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "67e8f569b73b69e9fd7bcf6239437b26d278afc6",
+  "prompts": {
+    "cf1305b01657cc28": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37ebc813-8ef9-4fcd-b2fa-1d9836622263",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 162,
+      "total_deletions": 12,
+      "accepted_lines": 157,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/3db64cc4404fc27e81f6eb0214d79bda2c1eda2c0d414f5634fde68b603067a4"
+    }
+  }
+}
