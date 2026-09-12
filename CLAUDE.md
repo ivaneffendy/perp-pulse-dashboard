@@ -59,6 +59,7 @@ src/
   matrix.js         Phase 1 grid + score chips
   detail.js         Phase 2 panel
   movers.js         Movers tab render — awareness-only, no score, no click
+  marketcap.js      top-100-by-market-cap allowlist for Movers, device-fetched
   chart.js          Chart tab — 4H candles + POI overlay, OKX direct, no Worker
   weather.js        BTC.D / USDT.D / TOTAL3 + manual ETF toggle
   format.js         per-symbol price / coin / percent formatters
@@ -332,6 +333,19 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   step (OTHERS.D vs TOTAL3, "are alts being bid at all") — the weather bar
   already shows TOTAL3, and reading it that way is left to the trader rather
   than automated here.
+- **Movers is capped to the top 100 coins by market cap**, on top of the
+  turnover floor above — otherwise established-but-thin-turnover names (LSK,
+  memecoins with a one-day pump) crowd out the majors the rel-strength scan
+  was meant to surface. The cap list can't be fetched from the Worker itself:
+  same shared-egress-IP rate-limit problem `fetchDominance` documents in
+  `src/weather.js`. So `src/marketcap.js` fetches it FROM THE DEVICE
+  (CoinGecko, then CoinPaprika) and relays it to `/movers` as `?top100=`,
+  exactly like `?etf=` relays a device-fetched number into scoring — the
+  ranking itself still happens server-side in `rankMovers()`
+  (`worker/src/compute/movers.js`). Cached 24h in `localStorage.ppd_top100`
+  since cap rank barely moves day to day. If both vendors are unreachable and
+  nothing is cached, `?top100=` is simply omitted and the tab falls back to
+  its prior whole-market ranking rather than showing nothing.
 
 - **The Chart tab is an OKX-only read, and it says so.** Every other per-asset
   number comes through the Worker (Bybit primary, OKX fallback); the chart

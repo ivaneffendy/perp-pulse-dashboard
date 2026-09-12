@@ -48,8 +48,14 @@ export const fetchLtf = (base, side = null) => get('/ltf', { symbol: base, side 
  * Awareness-only cross-market screener. Rides the normal manual-refresh
  * cadence — no separate timer, unlike /ltf which is deliberately excluded
  * from every automatic path.
+ *
+ * `top100Bases` is a comma-joined allowlist fetched client-side (see
+ * src/marketcap.js) and relayed to the Worker as `?top100=`, the same
+ * pattern `?etf=` uses to keep the ranking itself server-side. Omitted when
+ * the device couldn't reach a market-cap vendor, which leaves the Worker's
+ * default whole-market ranking in place.
  */
-export const fetchMovers = () => get('/movers', {});
+export const fetchMovers = (top100Bases = null) => get('/movers', { top100: top100Bases });
 
 /**
  * Fan out one request per asset. Deliberately NOT a single /matrix call: a

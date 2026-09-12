@@ -75,6 +75,18 @@ test('CORS headers are present so the page can call it', async () => {
   assert.equal(res.headers.get('Access-Control-Allow-Origin'), '*');
 });
 
+test('?top100= restricts the response to the given bases', async () => {
+  const res = await withFetch(
+    async () => ok({ result: { list: bybitList() } }),
+    () => handleMovers(new URL('https://x.test/movers?top100=BTC')),
+  );
+  const b = await res.json();
+  // ARB clears the floor but is not in the cap list, so it is excluded even
+  // though BTC itself is always excluded as the baseline — an empty result
+  // here would be indistinguishable from a bug, so assert it explicitly.
+  assert.deepEqual(b.items, []);
+});
+
 test('response item keys are exactly the documented shape, with no score/verdict leakage', async () => {
   const res = await withFetch(
     async () => ok({ result: { list: bybitList() } }),

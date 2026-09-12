@@ -4,6 +4,7 @@ import { renderDetail } from './detail.js';
 import { renderWeather, initEtfToggle, fetchDominance } from './weather.js';
 import { enrichBinance } from './binance-enrich.js';
 import { renderMovers } from './movers.js';
+import { fetchTop100Bases } from './marketcap.js';
 import { renderChart, invalidateChartCache } from './chart.js';
 import { VALID_BASE } from '../worker/src/pairs.js';
 
@@ -290,7 +291,13 @@ async function lookup(raw) {
 async function load() {
   // Fired independently, not awaited: nothing downstream needs this before
   // the matrix can start, and /movers being slow must never delay Phase 1.
-  fetchMovers().then(renderMovers, () => renderMovers(null));
+  // The market-cap allowlist is fetched from this device (see marketcap.js,
+  // same reason as dominance) and relayed into /movers as ?top100= — a
+  // failed/uncached lookup resolves to null, which just leaves the Worker's
+  // whole-market ranking in place instead of blanking the tab.
+  fetchTop100Bases().catch(() => null)
+    .then(fetchMovers)
+    .then(renderMovers, () => renderMovers(null));
 
   // Chart candles are cached by symbol (see chart.js) so switching symbols or
   // re-opening the tab never re-asks OKX — only a real Refresh press does.
