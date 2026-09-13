@@ -2,6 +2,10 @@
   --bg:#0B0E14; --card:#11151F; --border:#1E2530;
   --text:#E6EAF2; --muted:#8A94A6;
   --up:#2FBF71; --down:#E5484D; --warn:#F5A623; --steel:#5B8DEF;
+  /* Liquidity rail only. Every other token was already spoken for by a
+     chart layer (warn=EQ, up/down=FVG, steel=OB+BOS), and a reused colour
+     would read as one of those layers. */
+  --liq:#A78BFA;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
@@ -185,3 +189,17 @@ body.stale-data .matrix{opacity:.45}
 .chart-canvas{display:block;width:100%}
 .chart-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .chart-legend{font-size:10.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+.chart-legend code{font-family:'IBM Plex Mono',ui-monospace,monospace;color:var(--liq)}
+.badge.liq{border-color:var(--liq);color:var(--liq)}
+.liq-toggle{cursor:pointer;font-family:inherit;background:transparent;opacity:.5}
+.liq-toggle.on{opacity:1;border-color:var(--liq);color:var(--liq)}
+.liq-toggle:focus-visible{outline:2px solid var(--liq);outline-offset:2px}
+.chart-liq{display:flex;align-items:center;gap:8px;margin-top:8px}
+.chart-liq-line{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;
+  font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px;color:var(--muted);
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+.chart-copy{flex:none;cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:.06em;
+  text-transform:uppercase;background:var(--card);color:var(--muted);
+  border:1px solid var(--border);border-radius:6px;padding:6px 9px}
+.chart-copy:hover{border-color:var(--liq);color:var(--liq)}
+.chart-copy:focus-visible{outline:2px solid var(--liq);outline-offset:2px}

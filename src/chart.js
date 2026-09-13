@@ -2,6 +2,7 @@ import { WORKER_URL } from './api.js';
 import { equilibrium } from '../worker/src/compute/equilibrium.js';
 import { findFvgs, nearestUnmitigatedFvg } from '../worker/src/compute/fvg.js';
 import { findOrderBlocks, nearestZone } from '../worker/src/compute/orderblock.js';
+import { findSwings, findLiquidity } from '../worker/src/compute/liquidity.js';
 import { marketMode } from '../worker/src/compute/mode.js';
 import { VALID_BASE } from '../worker/src/pairs.js';
 import { fmtPrice, fmtPct, signClass } from './format.js';
@@ -19,11 +20,11 @@ const TIMEOUT_MS = 8000;
  * number: equilibrium()/marketMode() already only ever look at their own
  * last 30 bars (5 days) no matter how much history is handed to them — that
  * is the playbook's own lookback, shared with the Worker's /asset payload.
- * FVG/OB detection has no such built-in limit, though, and a zone can form
- * and sit unmitigated for longer than 5 days. So COMPUTE_BARS fetches enough
- * history for FVG/OB to still find an older, still-relevant zone, while only
- * DISPLAY_BARS worth of candles are actually drawn — bigger candles on
- * screen without quietly shrinking what FVG/OB can see.
+ * FVG/OB/liquidity detection has no such built-in limit, though, and a zone —
+ * or an untaken pool of stops — can sit there for longer than 5 days. So
+ * COMPUTE_BARS fetches enough history for those three to still find an older,
+ * still-relevant level, while only DISPLAY_BARS worth of candles are drawn —
+ * bigger candles on screen without quietly shrinking what they can see.
  */
 const COMPUTE_BARS = 90;
 const DISPLAY_BARS = 30;
@@ -87,28 +88,53 @@ async function getBars(base) {
 function findSwingsAndBos(bars, lookback = 30, bosWithin = 6) {
   const win = bars.slice(-lookback);
   const winStart = bars.length - win.length;
-  if (win.length < 9) return { swingHighs: [], swingLows: [], bos: null };
+  // The 2-bar fractal loop used to be written out here verbatim, a second
+  // copy of mode.js's. liquidity.js owns the one definition now; only the BOS
+  // half below is still local, because it exists purely to give the chart a
+  // step-line to draw. (mode.js keeps its own copy deliberately — it feeds the
+  // scored §VII TREND/RANGE read.)
+  const { highs, lows } = findSwings(bars, lookback);
+  if (win.length < 9) return { swingHighs: highs, swingLows: lows, bos: null };
 
-  const highs = [], lows = [];
-  for (let i = 2; i < win.length - 2; i++) {
-    const { h, l } = win[i];
-    if (h > win[i-1].h && h > win[i-2].h && h > win[i+1].h && h > win[i+2].h) highs.push({ i, p: h });
-    if (l < win[i-1].l && l < win[i-2].l && l < win[i+1].l && l < win[i+2].l) lows.push({ i, p: l });
-  }
   let lastBos = null;
   for (let i = 0; i < win.length; i++) {
+    const bi = i + winStart; // findSwings indexes in bars space, so compare there
     let priorHigh = null, priorLow = null;
-    for (const s of highs) if (s.i < i) priorHigh = s;
-    for (const s of lows)  if (s.i < i) priorLow = s;
-    if (priorHigh && win[i].c > priorHigh.p) lastBos = { i, direction: 1, level: priorHigh.p };
-    if (priorLow  && win[i].c < priorLow.p)  lastBos = { i, direction: -1, level: priorLow.p };
+    for (const s of highs) if (s.i < bi) priorHigh = s;
+    for (const s of lows)  if (s.i < bi) priorLow = s;
+    if (priorHigh && win[i].c > priorHigh.p) lastBos = { i: bi, direction: 1, level: priorHigh.p };
+    if (priorLow  && win[i].c < priorLow.p)  lastBos = { i: bi, direction: -1, level: priorLow.p };
   }
-  const inWindow = lastBos && (win.length - 1 - lastBos.i) <= bosWithin;
-  return {
-    swingHighs: highs.map((s) => ({ i: s.i + winStart, p: s.p })),
-    swingLows: lows.map((s) => ({ i: s.i + winStart, p: s.p })),
-    bos: inWindow ? { i: lastBos.i + winStart, direction: lastBos.direction, level: lastBos.level } : null,
-  };
+  const inWindow = lastBos && (bars.length - 1 - lastBos.i) <= bosWithin;
+  return { swingHighs: highs, swingLows: lows, bos: inWindow ? lastBos : null };
+}
+
+/**
+ * What actually reaches the rail. liquidity.js returns everything sorted
+ * nearest-first and refuses to make this choice for us, so the phone-screen
+ * budget is spent here:
+ *   - both PD levels always — only two lines, and §III.1 Pillar 5 names them
+ *   - the 4 nearest clusters, swept ones included: a raid that already
+ *     happened is information, it just gets drawn hollow
+ *   - the 4 nearest lone fractals, UNSWEPT ONLY — a taken single level is the
+ *     weakest thing on the chart and purely noise
+ */
+const MAX_CLUSTERS = 4, MAX_FRACTALS = 4;
+function selectPools(pools) {
+  const take = (tier, n, keep = () => true) =>
+    pools.filter((x) => x.tier === tier && keep(x)).slice(0, n);
+  return [
+    ...take('PD', 2),
+    ...take('CLUSTER', MAX_CLUSTERS),
+    ...take('FRACTAL', MAX_FRACTALS, (x) => !x.swept),
+  ];
+}
+
+/** PDH/PDL · EQH/EQL (equal = clustered) · SWH/SWL (a lone swing). */
+function poolName(p) {
+  if (p.tier === 'PD') return p.side === 'high' ? 'PDH' : 'PDL';
+  if (p.tier === 'CLUSTER') return p.side === 'high' ? 'EQH' : 'EQL';
+  return p.side === 'high' ? 'SWH' : 'SWL';
 }
 
 /**
@@ -119,7 +145,7 @@ function findSwingsAndBos(bars, lookback = 30, bosWithin = 6) {
  * drawn (canvas clips it at the left edge on its own): that is the point —
  * it says "this zone is real, it just formed earlier than what's shown."
  */
-function drawCandles(canvas, bars, { eq, fvg, fvgAll, obs, geo, price, offset }) {
+function drawCandles(canvas, bars, { eq, fvg, fvgAll, obs, geo, price, offset, liq }) {
   const cssW = canvas.parentElement.clientWidth;
   const cssH = Math.max(300, Math.min(460, cssW * 0.75));
   const dpr = window.devicePixelRatio || 1;
@@ -131,8 +157,18 @@ function drawCandles(canvas, bars, { eq, fvg, fvgAll, obs, geo, price, offset })
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, cssW, cssH);
 
-  const padL = 4, padR = 58, padT = 12, padB = 20;
+  /**
+   * Liquidity gets its OWN gutter and never enters the candle field. A pool is
+   * a price level; a price level needs to be readable against the price axis,
+   * not to be smeared across 30 candles the way the zone layers are. When the
+   * rail is toggled off it costs nothing — the space is not reserved.
+   */
+  const RAIL_W = liq.length ? 28 : 0;
+  const RAIL_GAP = RAIL_W ? 6 : 0;
+  const padL = 4, padR = 58 + RAIL_W + RAIL_GAP, padT = 12, padB = 20;
   const plotW = cssW - padL - padR, plotH = cssH - padT - padB;
+  const railX0 = padL + plotW + 3;
+  const axisX = padL + plotW + RAIL_W + RAIL_GAP + 7; // price labels keep their 51px
   const n = bars.length;
 
   let lo = Infinity, hi = -Infinity;
@@ -169,7 +205,7 @@ function drawCandles(canvas, bars, { eq, fvg, fvgAll, obs, geo, price, offset })
     const y = yAt(p);
     ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
     ctx.fillStyle = cMuted; ctx.textAlign = 'left';
-    ctx.fillText(fmtPrice(p), padL + plotW + 7, y);
+    ctx.fillText(fmtPrice(p), axisX, y);
   }
 
   if (eq) {
@@ -188,10 +224,22 @@ function drawCandles(canvas, bars, { eq, fvg, fvgAll, obs, geo, price, offset })
     ctx.setLineDash([]);
   }
 
+  /**
+   * Only the NEAREST zone — the one the badge below actually names — runs to
+   * the right edge. Every other unmitigated FVG/OB used to do the same, and a
+   * dozen translucent bands all terminating at the right edge turned the part
+   * of the chart where price sits into unreadable mud. The rest now get a
+   * short stub: still says "a zone formed here", stops smearing the tape.
+   * The stub starts at the left edge for a zone whose origin is off-screen,
+   * so an older zone does not silently vanish.
+   */
+  const STUB_BARS = 3;
+  const stubEnd = (x0) => Math.max(x0, padL) + slot * STUB_BARS;
+
   for (const g of fvgAll) {
     const isNearest = fvg && g.index === fvg.index && g.type === fvg.type;
     const x0 = xAtC(g.index - 1) - slot * 0.5;
-    const x1 = padL + plotW;
+    const x1 = isNearest ? padL + plotW : stubEnd(x0);
     const yTop = yAt(g.top), yBot = yAt(g.bottom);
     const base = g.type === 'bull' ? cUp : cDown;
     ctx.fillStyle = alpha(base, isNearest ? 0.18 : 0.07);
@@ -202,7 +250,8 @@ function drawCandles(canvas, bars, { eq, fvg, fvgAll, obs, geo, price, offset })
   const obNearest = obs.nearest;
   for (const ob of obs.all) {
     const isNearest = obNearest && ob.index === obNearest.index && ob.type === obNearest.type;
-    const x0 = xAtC(ob.index) - bw * 0.9, x1 = padL + plotW;
+    const x0 = xAtC(ob.index) - bw * 0.9;
+    const x1 = isNearest ? padL + plotW : stubEnd(x0);
     const yTop = yAt(ob.top), yBot = yAt(ob.bottom);
     ctx.fillStyle = alpha(cSteel, isNearest ? 0.16 : 0.05);
     ctx.fillRect(x0, yTop, x1 - x0, yBot - yTop);
@@ -255,9 +304,42 @@ function drawCandles(canvas, bars, { eq, fvg, fvgAll, obs, geo, price, offset })
   ctx.beginPath(); ctx.moveTo(padL, yPx); ctx.lineTo(padL + plotW, yPx); ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = cText;
-  ctx.fillRect(padL + plotW + 2, yPx - 7, padR - 4, 14);
+  ctx.fillRect(axisX - 5, yPx - 7, cssW - axisX + 3, 14);
   ctx.fillStyle = col('--bg'); ctx.font = '600 10px ' + mono; ctx.textAlign = 'left';
-  ctx.fillText(fmtPrice(price), padL + plotW + 6, yPx);
+  ctx.fillText(fmtPrice(price), axisX, yPx);
+
+  /**
+   * The liquidity rail. Tick LENGTH carries touch count (a stack of 4 equal
+   * highs is visibly longer than a pair); FILLED = still resting, HOLLOW =
+   * already swept. PD levels get an H/L glyph because §III.1 Pillar 5 names
+   * them specifically. Nothing here is called "inducement" or "draw target" —
+   * see liquidity.js for why that judgement is not the dashboard's to make.
+   *
+   * A pool outside the visible price scale is skipped rather than clamped to
+   * an edge, which would put it at a price it is not at. The badge and the
+   * copy line below still report it.
+   */
+  if (RAIL_W) {
+    const cLiq = col('--liq');
+    ctx.strokeStyle = cBorder; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(railX0 - 2, padT); ctx.lineTo(railX0 - 2, padT + plotH); ctx.stroke();
+    for (const pool of liq) {
+      if (pool.level > hi || pool.level < lo) continue;
+      const y = yAt(pool.level);
+      const w = pool.tier === 'PD' ? 10
+        : pool.tier === 'CLUSTER' ? Math.min(22, 8 + pool.touches * 4) : 6;
+      ctx.globalAlpha = pool.swept ? 0.45 : 1;
+      ctx.strokeStyle = cLiq; ctx.fillStyle = cLiq; ctx.lineWidth = 1;
+      if (pool.swept) ctx.strokeRect(railX0 + 0.5, y - 1.5, w, 3);
+      else ctx.fillRect(railX0, y - 1.5, w, 3);
+      if (pool.tier === 'PD') {
+        ctx.font = '600 8.5px ' + mono; ctx.textAlign = 'left';
+        ctx.fillText(pool.side === 'high' ? 'H' : 'L', railX0 + w + 3, y);
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.font = '10px ' + mono;
+  }
 
   ctx.fillStyle = cMuted; ctx.font = '9.5px ' + mono;
   const fmtT = (t) => new Date(t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', hour12: false });
@@ -314,6 +396,26 @@ export async function renderChart(container, base, isCurrent = () => true) {
   const obNearest = nearestZone(obAll, price);
   const mode = marketMode(computeBars);
   const geo = findSwingsAndBos(computeBars);
+  const liqAll = findLiquidity(computeBars, price).pools;
+  const liqDrawn = selectPools(liqAll);
+  // The badge names the nearest pool that is STILL THERE — a swept level is
+  // not somewhere price is being drawn to any more.
+  const liqNearest = liqAll.find((x) => !x.swept) || null;
+
+  /**
+   * The line the operator pastes into a chart read. It is built from
+   * `liqDrawn`, not `liqAll`, on purpose: what gets recorded must be exactly
+   * what was on screen when it was read, or the two stop being comparable.
+   */
+  const liqLine = [`LIQ 4H ${base}`, ...liqDrawn.map((x) =>
+    `${poolName(x)} ${fmtPrice(x.level)}${x.touches > 1 ? ` x${x.touches}` : ''}`
+    + ` ${x.swept ? 'swept' : 'unswept'} ${fmtPct(x.offsetPct)}`,
+  )].join(' | ');
+
+  // Private-mode / blocked-storage browsers must still render the chart.
+  const LIQ_KEY = 'pp.chart.liq';
+  let liqOn = true;
+  try { liqOn = localStorage.getItem(LIQ_KEY) !== '0'; } catch { /* no storage */ }
 
   // Only the tail is actually drawn — see COMPUTE_BARS/DISPLAY_BARS above.
   const displayBars = computeBars.slice(-DISPLAY_BARS);
@@ -330,13 +432,56 @@ export async function renderChart(container, base, isCurrent = () => true) {
       ${eq ? `<span class="badge">${eq.zone} · ${fmtPct(eq.pctToLow)} above 4H low (${fmtPrice(eq.ll)}–${fmtPrice(eq.hh)})</span>` : ''}
       <span class="badge">${fvg ? `${fvg.type === 'bull' ? 'Bull' : 'Bear'} FVG ${fvg.distPct.toFixed(2)}%` : "No-Man's Land"}</span>
       <span class="badge">${obNearest ? `${obNearest.type === 'bull' ? 'Bull' : 'Bear'} OB ${obNearest.distPct.toFixed(2)}%` : 'No OB nearby'}</span>
+      <span class="badge liq">${liqNearest
+        ? `${poolName(liqNearest)}${liqNearest.touches > 1 ? ` \u00d7${liqNearest.touches}` : ''} ${fmtPct(liqNearest.offsetPct)}`
+        : 'No resting liquidity'}</span>
       <span class="badge ${mode.mode === 'TREND' ? (mode.direction > 0 ? 'pos' : 'neg') : ''}">
         ${mode.mode === 'TREND' ? `TREND ${mode.direction > 0 ? '↑' : '↓'}` : 'RANGE'}
       </span>
+      <button type="button" class="badge liq-toggle" aria-pressed="true">LIQ rail</button>
     </div>
-    <p class="chart-legend">Amber = the <b>rolling 30-bar</b> 4H high/low/EQ — a trailing 5-day extreme, <b>not</b> an anchored swing range, so it will not match a hand-drawn one · triangles = swing fractals · cyan step = the BOS driving TREND · green/red box = nearest unmitigated FVG · dashed steel box = order blocks (OB — provisional: unmitigated + at displacement origin, but it does <b>not</b> verify the move broke structure, and does not skip mid-range zones). Price is the last <b>closed</b> 4H bar, so it can differ from the Matrix row's live mark. FVG/OB are scanned over more history than is drawn, so a box can run off the left edge. Candles come through the Worker, so the venue matches the row.</p>
+    <div class="chart-liq"><code class="chart-liq-line"></code><button type="button" class="chart-copy">Copy</button></div>
+    <p class="chart-legend">Amber = the <b>rolling 30-bar</b> 4H high/low/EQ — a trailing 5-day extreme, <b>not</b> an anchored swing range, so it will not match a hand-drawn one · triangles = swing fractals · cyan step = the BOS driving TREND · green/red box = nearest unmitigated FVG · dashed steel box = order blocks (OB — provisional: unmitigated + at displacement origin, but it does <b>not</b> verify the move broke structure, and does not skip mid-range zones). Price is the last <b>closed</b> 4H bar, so it can differ from the Matrix row's live mark. Only the <b>nearest</b> FVG/OB runs to the right edge; the others are stubbed to 3 bars so they stop covering the tape, and FVG/OB are scanned over more history than is drawn, so a box can start off the left edge. Violet right-hand rail = <b>resting liquidity</b>: filled = still there, hollow = already swept, longer tick = more equal touches; <code>H</code>/<code>L</code> = previous UTC day high/low. It marks <b>where liquidity rests, not whether it is inducement or a draw target</b> \u2014 which one depends on your selected POI and direction, and the dashboard knows neither. Retail trendlines and session highs/lows are <b>not</b> detected (4H bars cannot resolve Asia/London/NY). A pool off the visible price scale is left out of the rail but still reported in the badge and the copy line. Candles come through the Worker, so the venue matches the row.</p>
   `;
-  drawCandles(container.querySelector('.chart-canvas'), displayBars, {
+  // Generated text, but set as textContent anyway — same rule the status()
+  // helper follows, and it keeps `base` out of a markup path for good.
+  container.querySelector('.chart-liq-line').textContent = liqLine;
+
+  const canvas = container.querySelector('.chart-canvas');
+  const liqBox = container.querySelector('.chart-liq');
+  const toggle = container.querySelector('.liq-toggle');
+  const paint = () => drawCandles(canvas, displayBars, {
     eq, fvg, fvgAll, obs: { all: obAll, nearest: obNearest }, geo, price, offset,
+    liq: liqOn ? liqDrawn : [],
   });
+  const syncLiq = () => {
+    toggle.classList.toggle('on', liqOn);
+    toggle.setAttribute('aria-pressed', String(liqOn));
+    liqBox.hidden = !liqOn;
+    paint();
+  };
+  toggle.addEventListener('click', () => {
+    liqOn = !liqOn;
+    try { localStorage.setItem(LIQ_KEY, liqOn ? '1' : '0'); } catch { /* no storage */ }
+    syncLiq();
+  });
+
+  const copy = container.querySelector('.chart-copy');
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(liqLine);
+      copy.textContent = 'Copied';
+    } catch {
+      // Insecure context or a denied permission — select it so the operator
+      // can copy by hand rather than being told nothing happened.
+      const r = document.createRange();
+      r.selectNodeContents(container.querySelector('.chart-liq-line'));
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+      copy.textContent = 'Select + copy';
+    }
+    setTimeout(() => { copy.textContent = 'Copy'; }, 1800);
+  });
+
+  syncLiq();
 }

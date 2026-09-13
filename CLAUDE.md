@@ -27,8 +27,10 @@ Phone browser (GitHub Pages, static, no build step)
   │       └─ awareness-only — rides the same Refresh press, never scored
   ├─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
   │    └─ ON DEMAND ONLY — a button press, never the refresh loop
-  └─ Chart tab ─────────────▶ OKX 4H candles DIRECT from the device (no Worker)
-       └─ display-only POI overlay; one symbol at a time, cached per refresh
+  └─ GET /candles?symbol=X   ─▶ Worker ─▶ Bybit 4H klines (1 call, OKX fallback)
+       └─ display-only POI + liquidity overlay; one symbol at a time,
+          cached per refresh. NOT device-direct: Indonesian ISPs block the
+          exchanges, which is what this Worker exists for.
 ```
 
 ### Why fan out instead of one `/matrix` call
@@ -60,7 +62,8 @@ src/
   detail.js         Phase 2 panel
   movers.js         Movers tab render — awareness-only, no score, no click
   marketcap.js      top-100-by-market-cap allowlist for Movers, device-fetched
-  chart.js          Chart tab — 4H candles + POI overlay, OKX direct, no Worker
+  chart.js          Chart tab — 4H candles + POI overlay + liquidity rail,
+                    candles via the Worker
   weather.js        BTC.D / USDT.D / TOTAL3 + manual ETF toggle
   format.js         per-symbol price / coin / percent formatters
   binance-enrich.js client-side Binance enrichment
@@ -70,7 +73,7 @@ worker/src/
   sources/          bybit · okx · binance · macro   (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
                     · absorption  (§IV Step 2, /ltf only) · regime · movers
-                    · orderblock  (chart overlay only — never scored)
+                    · orderblock · liquidity  (chart overlay only — never scored)
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
@@ -356,7 +359,8 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   forming candle is dropped — the two are up to 4h apart mid-bar. Both facts
   are stated in the tab's own copy rather than left to be discovered.
 - **The browser imports `worker/src/compute/*.js` directly.** `src/chart.js`
-  pulls `klines`, `equilibrium`, `fvg`, `mode`, `orderblock` and `pairs`
+  pulls `klines`, `equilibrium`, `fvg`, `mode`, `orderblock`, `liquidity`
+  and `pairs`
   (`VALID_BASE`) straight out of the Worker tree so there is exactly one copy
   of each rule, guarded by the existing `worker/test` suites. That makes
   GitHub Pages serving the `worker/` directory — and therefore `.nojekyll` —
@@ -381,6 +385,28 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   skip mid-range zones. So it can badge a zone Pillar 3 would score 0. Closing
   that gap is a playbook question, not a refactor: it is open as R23 in the
   private playbook repo and must be decided there first.
+- **The liquidity rail says WHERE, never WHICH PILLAR.** `compute/liquidity.js`
+  emits resting-liquidity pools in three tiers — EQH/EQL clusters (fractals
+  within 0.15% of each other), lone fractals, and previous-UTC-day high/low —
+  each marked swept or not, by WICK, because §IV Step 1's sweep is explicitly
+  a wick. It deliberately does NOT label a pool "inducement" (§III.1 Pillar 4)
+  or "draw target" (Pillar 5): which one it is depends on the operator's
+  selected POI and intended direction, and this code knows neither. Guessing
+  the POI to produce a label is the same defect R22/R23 refuse to commit — a
+  display that reads as a pillar while implementing something else. That
+  judgement belongs to the chart-read adjudicator in the private repo, which
+  is handed the marked POI. Two consequences worth keeping: PDH/PDL is
+  aggregated from the 4H bars into **UTC** days rather than fetched as OKX
+  dailies (they roll at UTC+8 — the bug 97e845a had to fix), and the scan
+  window defaults to **every bar handed in**, unlike `equilibrium()`/
+  `marketMode()`'s rolling 30 — resting liquidity does not expire on a
+  rolling window, it rests until it is taken.
+- **Only the NEAREST FVG/OB runs to the right edge.** Every unmitigated zone
+  used to, and a dozen translucent bands all terminating at the right edge
+  turned the part of the chart where price actually sits into mud. Non-nearest
+  zones are stubbed to 3 bars (clamped to the left edge so an older zone does
+  not vanish). The rail gets its own gutter and never enters the candle field;
+  toggled off, it reserves no space at all.
 - **The "4H high/low" is a rolling 30-bar extreme, NOT an anchored swing range.**
   `equilibrium()` takes the high/low of the last 30 4H bars, so it re-anchors
   every bar and a single volatile candle can define the whole range (verified
