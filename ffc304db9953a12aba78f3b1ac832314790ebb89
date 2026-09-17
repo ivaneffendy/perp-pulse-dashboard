@@ -1,0 +1,30 @@
+.claude/workflows/signal-code-audit.js
+  df780e4e33a767dc 1-92
+.claude/workflows/claude-md-freshness-audit.js
+  df780e4e33a767dc 1-76
+.claude/workflows/backfill-correctness-check.js
+  df780e4e33a767dc 1-97
+.claude/workflows/README.md
+  df780e4e33a767dc 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "ffc304db9953a12aba78f3b1ac832314790ebb89",
+  "prompts": {
+    "df780e4e33a767dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b46eab3-4e9a-4fef-b713-9014677441e6",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 285,
+      "total_deletions": 0,
+      "accepted_lines": 285,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/346f67be6d7f11121931c0d11d46e785aabfe53ec23a8a060d6b33256fe53dba"
+    }
+  }
+}
