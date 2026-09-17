@@ -1,0 +1,24 @@
+.claude/workflows/playbook-audit.js
+  df780e4e33a767dc 15-19,33-34,43-51,54-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "e1f6b3c6c3ca1effb75a481a57d0d01393c1927d",
+  "prompts": {
+    "df780e4e33a767dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8b46eab3-4e9a-4fef-b713-9014677441e6",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 47,
+      "total_deletions": 5,
+      "accepted_lines": 47,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/6cf3790eca93764b40c559df05209d6405e9a289896f4cc9b5bed88007387c22"
+    }
+  }
+}
