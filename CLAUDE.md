@@ -77,10 +77,22 @@ worker/src/
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (128 tests)
+worker/test/        node --test suites (180 tests)
+scripts/            journal backfills (R11 MFE, R11b SL counterfactual)
+                    + their own node --test suites (20 tests)
 ```
 
-Run tests: `cd worker && npm test`. Deploy Worker: `cd worker && npx wrangler deploy`.
+Run tests: `cd worker && npm test` **and** `cd scripts && npm test` — two
+separate packages, two suites. Deploy Worker: `cd worker && npx wrangler deploy`.
+
+**Both `test` scripts pass a quoted glob, never a directory.** `node --test <dir>`
+does not search that directory — it tries to *execute* it as an entry point and
+dies with `MODULE_NOT_FOUND`, reported as one failing test named after the
+directory. Verified on Node 18, 20, 22 and 24, and in an empty directory holding
+a single passing test, so it is not a version regression. The bare `node --test`
+(no argument) does recurse from cwd; only the positional-directory form is the
+trap. `worker/` was already fixed this way — the 2026-08-19 plan specified
+`node --test test/` and it had to be changed.
 Page deploys itself via GitHub Pages — no build step.
 
 ### Four questions, one codebase — this is deliberate

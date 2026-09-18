@@ -1,5 +1,8 @@
 {
   "name": "perp-pulse-scripts",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"*.test.js\""
+  }
 }
