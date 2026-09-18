@@ -314,7 +314,8 @@ async function main() {
       if (!(await venue.exists(sym))) {
         // A coin the venue never listed is expected, not exceptional.
         console.error(`${label} SKIP — not listed on ${venue.label}`);
-        rows.push({ trade_id: t.id, pair: t.base, direction: t.direction, note: `not listed on ${venue.label}` });
+        rows.push({ trade_id: t.id, pair: t.base, direction: t.direction, venue: args.venue,
+          note: `not listed on ${venue.label}` });
         continue;
       }
 
@@ -337,6 +338,7 @@ async function main() {
         fill_ts: iso(win.fill),
         exit_ts: iso(win.exit),
         ts_source: win.source,
+        venue: args.venue,
         r_distance: round(rDistance, 6),
         mfe_R: round(ex.mfe_R, 3),
         mae_R: round(ex.mae_R, 3),
@@ -352,18 +354,35 @@ async function main() {
     } catch (err) {
       // One unrecoverable trade must not cost the other 27.
       console.error(`${label} FAILED — ${err.message}`);
-      rows.push({ trade_id: t.id, pair: t.base, direction: t.direction, note: `failed: ${err.message}` });
+      rows.push({ trade_id: t.id, pair: t.base, direction: t.direction, venue: args.venue,
+        note: `failed: ${err.message}` });
     } finally {
       if (t.entryTs) prevEntryMs = t.entryTs.ms;
     }
   }
 
-  const header = ['trade_id', 'pair', 'direction', 'fill_ts', 'exit_ts', 'ts_source', 'r_distance',
-    'mfe_R', 'mae_R', 'hit_1R', 'hit_2R', 'bars_to_mfe', 'hold_hours', 'result', 'note'];
-  writeFileSync(args.out,
-    [header.join(','), ...rows.map((r) => header.map((h) => csvEscape(r[h])).join(','))].join('\n') + '\n');
+  writeFileSync(args.out, serialiseRows(rows));
 
   summarise(rows, args.out);
+}
+
+/**
+ * The output column contract.
+ *
+ * `venue` is provenance, not measurement. mfe_R/mae_R are venue-dependent —
+ * thin books disagree about wicks, and the same trade can land in a different
+ * R11 bucket depending on where it was priced — so a column that mixes venues
+ * without saying so is not comparable row to row. It sits beside `ts_source`
+ * because both answer "where did this number come from", not "what is it".
+ */
+const OUTPUT_COLUMNS = ['trade_id', 'pair', 'direction', 'fill_ts', 'exit_ts', 'ts_source', 'venue',
+  'r_distance', 'mfe_R', 'mae_R', 'hit_1R', 'hit_2R', 'bars_to_mfe', 'hold_hours', 'result', 'note'];
+
+/** Rows -> CSV text. A row that omits a column yields an empty cell, never a
+ *  shifted one: SKIP and FAILED rows carry only a handful of fields. */
+function serialiseRows(rows) {
+  return [OUTPUT_COLUMNS.join(','),
+    ...rows.map((r) => OUTPUT_COLUMNS.map((h) => csvEscape(r[h])).join(','))].join('\n') + '\n';
 }
 
 const round = (n, d) => Number(n.toFixed(d));
@@ -396,4 +415,5 @@ function summarise(rows, outPath) {
 // Importable for tests; runs only when invoked as a script.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
 
-export { parseCsv, parseWib, clean, excursions, resolveWindow, fetchRange, VENUES, loadOverrides, iso };
+export { parseCsv, parseWib, clean, excursions, resolveWindow, fetchRange, VENUES, loadOverrides, iso,
+  OUTPUT_COLUMNS, serialiseRows };

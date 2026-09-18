@@ -14,7 +14,8 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCsv, parseWib, clean, excursions, resolveWindow, fetchRange, loadOverrides } from './backfill_mfe.js';
+import { parseCsv, parseWib, clean, excursions, resolveWindow, fetchRange, loadOverrides,
+  OUTPUT_COLUMNS, serialiseRows } from './backfill_mfe.js';
 import { INTERVAL_15M } from '../worker/src/compute/klines.js';
 
 const UTC = (y, mo, d, h = 0, mi = 0) => Date.UTC(y, mo - 1, d, h, mi);
@@ -165,4 +166,31 @@ test('a row whose stop price survived needs no override', () => {
 
 test('loadOverrides reads the journal-side table, and tolerates absence', () => {
   assert.deepEqual(loadOverrides(null), {}, 'no --overrides means no repairs');
+});
+
+test('every output row is stamped with the venue it was priced on', () => {
+  // mfe_R/mae_R are venue-dependent, so an unstamped column silently mixes
+  // instruments. Provenance sits next to ts_source, which answers the same
+  // kind of question.
+  assert.ok(OUTPUT_COLUMNS.includes('venue'));
+  assert.equal(OUTPUT_COLUMNS[OUTPUT_COLUMNS.indexOf('ts_source') + 1], 'venue');
+  assert.equal(new Set(OUTPUT_COLUMNS).size, OUTPUT_COLUMNS.length);
+});
+
+test('REGRESSION: a sparse SKIP/FAILED row pads, it does not shift', () => {
+  // A coin the venue never listed produces a row with four fields. Serialising
+  // it positionally would slide `note` into `fill_ts` and the venue stamp with
+  // it — the exact class of undetectable-from-inside corruption the journal's
+  // own trailed-trade columns already demonstrate.
+  const csv = serialiseRows([
+    { trade_id: 7, pair: 'FAKE', direction: 'long', venue: 'okx', note: 'not listed on OKX SWAP' },
+  ]);
+  const [header, row] = csv.trim().split('\n');
+  const cols = header.split(',');
+  const cells = row.split(',');
+  assert.equal(cells.length, cols.length);
+  assert.equal(cells[cols.indexOf('venue')], 'okx');
+  assert.equal(cells[cols.indexOf('fill_ts')], '');
+  assert.equal(cells[cols.indexOf('mfe_R')], '');
+  assert.ok(row.endsWith('not listed on OKX SWAP'));
 });
