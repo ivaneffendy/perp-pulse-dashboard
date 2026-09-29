@@ -24,6 +24,8 @@ import { regime } from './compute/regime.js';
 import { rankMovers, MOVERS } from './compute/movers.js';
 import { scoreAsset } from './score.js';
 import { verdict } from './verdict.js';
+import { fetchFlashes } from './sources/mktnews.js';
+import { selectDigest, formatDigestMessage } from './compute/digest.js';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -436,10 +438,60 @@ export async function handleMovers(url = null) {
   return json({ ts: now, source, items: rankMovers(tickers, MOVERS, capBases) });
 }
 
+const DIGEST_LOOKBACK_HOURS = 6;
+
+async function sendTelegramMessage(env, chatId, text) {
+  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
+/**
+ * Telegram webhook for the on-demand "/digest" command — "what's driving
+ * price lately", pulled from mktnews.com's flash feed (sources/mktnews.js)
+ * and filtered/formatted by compute/digest.js. No cron, no stored state:
+ * every call is a fresh read.
+ *
+ * Gatekeeping matters because a Telegram webhook URL is a public endpoint —
+ * the bot token alone does not restrict who can hit it, so any chat_id other
+ * than the configured owner is silently ignored (never a reply, never a
+ * hint that an owner is configured at all).
+ *
+ * Always resolves 200 back to Telegram (matching Telegram's own webhook
+ * contract) even when the flash feed fetch fails — the failure is reported
+ * to the operator via a Telegram reply instead of being swallowed, which is
+ * the same "never fail silently" rule the rest of this Worker follows for
+ * the dashboard's own weather widget.
+ */
+export async function handleTelegram(request, env) {
+  let update;
+  try { update = await request.json(); } catch { return new Response('bad request', { status: 400 }); }
+
+  const chatId = update?.message?.chat?.id;
+  const text = (update?.message?.text || '').trim();
+  if (String(chatId) !== String(env.TELEGRAM_OWNER_CHAT_ID)) return new Response('ok');
+  if (text !== '/digest') return new Response('ok');
+
+  const now = Date.now();
+  const flashes = await attempt(() => fetchFlashes(fetcher(60)));
+  if (!flashes.ok) {
+    await sendTelegramMessage(env, chatId, `Couldn't fetch the flash feed: ${flashes.err}`);
+    return new Response('ok');
+  }
+
+  const digest = selectDigest(flashes.val, { now, hours: DIGEST_LOOKBACK_HOURS });
+  const msg = formatDigestMessage(digest, { hours: DIGEST_LOOKBACK_HOURS });
+  await sendTelegramMessage(env, chatId, msg);
+  return new Response('ok');
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(request.url);
+    if (url.pathname === '/telegram') return handleTelegram(request, env);
     if (url.pathname === '/macro') return handleMacro(url);
     if (url.pathname === '/ltf') return handleLtf(url);
     if (url.pathname === '/candles') return handleCandles(url);

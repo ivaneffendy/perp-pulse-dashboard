@@ -27,10 +27,15 @@ Phone browser (GitHub Pages, static, no build step)
   │       └─ awareness-only — rides the same Refresh press, never scored
   ├─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
   │    └─ ON DEMAND ONLY — a button press, never the refresh loop
-  └─ GET /candles?symbol=X   ─▶ Worker ─▶ Bybit 4H klines (1 call, OKX fallback)
-       └─ display-only POI + liquidity overlay; one symbol at a time,
-          cached per refresh. NOT device-direct: Indonesian ISPs block the
-          exchanges, which is what this Worker exists for.
+  ├─ GET /candles?symbol=X   ─▶ Worker ─▶ Bybit 4H klines (1 call, OKX fallback)
+  │    └─ display-only POI + liquidity overlay; one symbol at a time,
+  │       cached per refresh. NOT device-direct: Indonesian ISPs block the
+  │       exchanges, which is what this Worker exists for.
+  └─ POST /telegram          ─▶ Worker ─▶ mktnews.com flash feed
+       └─ Telegram webhook, NOT part of the phone page — the owner's own
+          chat sends "/digest", Worker replies with important flashes from
+          the last 6h. On-demand only: no cron, no push, no stored state.
+          See "Telegram /digest" below.
 ```
 
 ### Why fan out instead of one `/matrix` call
@@ -70,14 +75,15 @@ src/
 worker/src/
   index.js          routing + CORS only — NO market logic
   pairs.js          allowlist + per-venue symbol mapping + VALID_BASE
-  sources/          bybit · okx · binance · macro   (fetch + normalize)
+  sources/          bybit · okx · binance · macro · mktnews  (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
                     · absorption  (§IV Step 2, /ltf only) · regime · movers
                     · orderblock · liquidity  (chart overlay only — never scored)
+                    · digest  (/telegram "what's driving price" — never scored)
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (180 tests)
+worker/test/        node --test suites (200 tests)
 scripts/            journal backfills (R11 MFE, R11b SL counterfactual)
                     + their own node --test suites (20 tests)
 ```
@@ -441,6 +447,51 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   the device's timezone, so a screenshot of a verdict can be compared against a
   later one. It deliberately does not tick, and a failed refresh leaves it
   showing the older time the visible numbers actually belong to.
+
+## Telegram `/digest` — "what's driving price lately", 2026-09-28
+
+Answers a plain question the phone dashboard never tried to: not "what's the
+score" but "why did the market move." Deliberately outside the four-question
+scoring framework — `compute/digest.js` is never imported by `score.js`,
+`verdict.js`, `absorption.js` or `regime.js`, same boundary `movers.js` and
+`liquidity.js` already hold.
+
+**On-demand only, by design.** The owner's own Telegram chat sends `/digest`,
+the Worker replies immediately. No cron, no push, no KV, no dedup state —
+this repo's CLAUDE.md already says the dashboard is "not a trading bot and
+not an alerting system," and a push/alert version would have been the wrong
+default for that reason. A cron+push digest was considered and deferred, not
+designed away — see the trading-vault spike that led here if it's revisited.
+
+**Source: `sources/mktnews.js`**, `static.mktnews.net/json/flash/en.json` —
+mktnews.com's own flash-news terminal feed, unauthenticated, no key. Same risk
+class as the Farside scrape in `macro.js`: unofficial, undocumented rate
+limit, could change or block at any time. Verified live 2026-09-28 that the
+feed's own `important` flag alone (no crypto-specific tag needed) caught the
+exact oil/yields/Fed story that was driving crypto that day — that's why
+`compute/digest.js` filters on `important` alone rather than a category
+allowlist, and why there is no "Crypto Concepts"-tag filter despite the
+feed's taxonomy having one.
+
+**The feed is a rolling ~50-item window, not a history.** On a busy news day
+that can hold under an hour, not the requested 6h lookback.
+`selectDigest()` reports the actual span it saw (computed from ALL in-window
+items, not just the important ones kept) so a quiet 6h reads as "quiet," never
+silently as "the feed only reached back 40 minutes and nothing happened to be
+important in that window" — the same "never let staleness pass as freshness"
+rule the phone dashboard's own staleness banner exists for.
+
+**Gatekeeping matters because a Telegram webhook URL is public.** The bot
+token authenticates the Worker to Telegram, not the other way around — anyone
+who finds the webhook URL can POST to it. `handleTelegram` checks the
+incoming `chat_id` against `TELEGRAM_OWNER_CHAT_ID` and silently
+no-ops on a mismatch: no reply, no error, nothing that would confirm a bot
+exists at all.
+
+**Secrets** (`wrangler secret put`, never committed): `TELEGRAM_BOT_TOKEN`
+from `@BotFather`, `TELEGRAM_OWNER_CHAT_ID` from the owner's own chat. After
+setting them, the webhook URL still needs registering with Telegram once:
+`curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=<worker-url>/telegram"`.
 
 ## Docs
 The **authoritative trading playbook** — the SMC/derivatives method this

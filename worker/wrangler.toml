@@ -2,5 +2,8 @@ name = "perp-pulse-data"
 main = "src/index.js"
 compatibility_date = "2025-06-01"
 
-# Free plan is fine: 100k requests/day. No KV/DO/secrets needed for v1 —
-# this Worker is a stateless read-through proxy.
+# Free plan is fine: 100k requests/day. Still no KV/DO — the /telegram route
+# is stateless too (no cron, no dedup, fresh read per request). It does need
+# two secrets, set via `wrangler secret put <NAME>`, never committed here:
+#   TELEGRAM_BOT_TOKEN      — from @BotFather
+#   TELEGRAM_OWNER_CHAT_ID  — the only chat_id the webhook will answer
