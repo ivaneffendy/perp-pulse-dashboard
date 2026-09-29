@@ -1,0 +1,52 @@
+worker/src/sources/mktnews.js
+  cdf01d0dfad7a721 1-34
+worker/wrangler.toml
+  cdf01d0dfad7a721 5-9
+CLAUDE.md
+  cdf01d0dfad7a721 30-38,78,82,86,451-495
+worker/src/compute/digest.js
+  cdf01d0dfad7a721 1-59
+worker/test/telegram-route.test.js
+  cdf01d0dfad7a721 1-94
+worker/test/mktnews.test.js
+  cdf01d0dfad7a721 1-49
+worker/test/digest.test.js
+  cdf01d0dfad7a721 1-74
+worker/src/index.js
+  cdf01d0dfad7a721 27-28,441-489,491,494
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "2b45b198bf1305402355b4b2cefb2650ade43d70",
+  "prompts": {
+    "34617105474e6a18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3e25b8e-0a98-4c49-9c30-dec8d6473e70",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 378,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/e964695fac3b622016ce27164d6104a28f7a4b3adbb0712278a4fb25e4807414"
+    },
+    "cdf01d0dfad7a721": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c5da352b-a45a-43bb-b82b-7ab31186bc09",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 425,
+      "total_deletions": 9,
+      "accepted_lines": 425,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/61643d4d7778bcbf8be9e9b69083cca5da2a919472900a0fa13fe84928902af7"
+    }
+  }
+}
