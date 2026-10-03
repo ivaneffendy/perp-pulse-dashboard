@@ -3,6 +3,7 @@ import { equilibrium } from '../worker/src/compute/equilibrium.js';
 import { findFvgs, nearestUnmitigatedFvg } from '../worker/src/compute/fvg.js';
 import { findOrderBlocks, nearestZone } from '../worker/src/compute/orderblock.js';
 import { findSwings, findLiquidity } from '../worker/src/compute/liquidity.js';
+import { selectPools, poolName, liqLine as buildLiqLine } from './liq-line.js';
 import { marketMode } from '../worker/src/compute/mode.js';
 import { VALID_BASE } from '../worker/src/pairs.js';
 import { fmtPrice, fmtPct, signClass } from './format.js';
@@ -107,34 +108,6 @@ function findSwingsAndBos(bars, lookback = 30, bosWithin = 6) {
   }
   const inWindow = lastBos && (bars.length - 1 - lastBos.i) <= bosWithin;
   return { swingHighs: highs, swingLows: lows, bos: inWindow ? lastBos : null };
-}
-
-/**
- * What actually reaches the rail. liquidity.js returns everything sorted
- * nearest-first and refuses to make this choice for us, so the phone-screen
- * budget is spent here:
- *   - both PD levels always — only two lines, and §III.1 Pillar 5 names them
- *   - the 4 nearest clusters, swept ones included: a raid that already
- *     happened is information, it just gets drawn hollow
- *   - the 4 nearest lone fractals, UNSWEPT ONLY — a taken single level is the
- *     weakest thing on the chart and purely noise
- */
-const MAX_CLUSTERS = 4, MAX_FRACTALS = 4;
-function selectPools(pools) {
-  const take = (tier, n, keep = () => true) =>
-    pools.filter((x) => x.tier === tier && keep(x)).slice(0, n);
-  return [
-    ...take('PD', 2),
-    ...take('CLUSTER', MAX_CLUSTERS),
-    ...take('FRACTAL', MAX_FRACTALS, (x) => !x.swept),
-  ];
-}
-
-/** PDH/PDL · EQH/EQL (equal = clustered) · SWH/SWL (a lone swing). */
-function poolName(p) {
-  if (p.tier === 'PD') return p.side === 'high' ? 'PDH' : 'PDL';
-  if (p.tier === 'CLUSTER') return p.side === 'high' ? 'EQH' : 'EQL';
-  return p.side === 'high' ? 'SWH' : 'SWL';
 }
 
 /**
@@ -402,15 +375,9 @@ export async function renderChart(container, base, isCurrent = () => true) {
   // not somewhere price is being drawn to any more.
   const liqNearest = liqAll.find((x) => !x.swept) || null;
 
-  /**
-   * The line the operator pastes into a chart read. It is built from
-   * `liqDrawn`, not `liqAll`, on purpose: what gets recorded must be exactly
-   * what was on screen when it was read, or the two stop being comparable.
-   */
-  const liqLine = [`LIQ 4H ${base}`, ...liqDrawn.map((x) =>
-    `${poolName(x)} ${fmtPrice(x.level)}${x.touches > 1 ? ` x${x.touches}` : ''}`
-    + ` ${x.swept ? 'swept' : 'unswept'} ${fmtPct(x.offsetPct)}`,
-  )].join(' | ');
+  // The line a chart read records (see src/liq-line.js) — the same builder
+  // scripts/dash_snapshot.js calls, so what is recorded is what is on screen.
+  const liqLine = buildLiqLine(base, liqAll);
 
   // Private-mode / blocked-storage browsers must still render the chart.
   const LIQ_KEY = 'pp.chart.liq';
