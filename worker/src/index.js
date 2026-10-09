@@ -22,6 +22,8 @@ import { sweepState } from './compute/sweep.js';
 import { marketMode } from './compute/mode.js';
 import { regime } from './compute/regime.js';
 import { rankMovers, MOVERS } from './compute/movers.js';
+import { anchoredRange, ANCHORED } from './compute/anchored.js';
+import { selectUniverse, sortCandidates, CANDIDATES } from './compute/candidates.js';
 import { scoreAsset } from './score.js';
 import { verdict } from './verdict.js';
 import { fetchFlashes } from './sources/mktnews.js';
@@ -438,6 +440,63 @@ export async function handleMovers(url = null) {
   return json({ ts: now, source, items: rankMovers(tickers, MOVERS, capBases) });
 }
 
+/**
+ * Candidates pre-screen — 4H trend + pullback into the anchored range. See
+ * compute/anchored.js and docs/superpowers/specs/2026-10-09-candidates-screener-design.md.
+ *
+ * Every kline comes from the venue that served the tickers, so the turnover
+ * criterion and the structure are read off the same book. Klines go out with
+ * retry:false: a geo-block mid-fan-out would otherwise multiply 20 requests by
+ * the retry ladder and blow the 50-subrequest budget. A failed coin is an
+ * `error` row, never a failed route.
+ */
+export async function handleCandidates(url) {
+  const now = Date.now();
+  const res = await withFallback(
+    () => bybitTickers(fetcher(30)),
+    () => okxTickers(fetcher(30)),
+  );
+  if (!res.ok) {
+    return json({
+      ts: now, error: 'No venue could serve market tickers',
+      detail: res.err,
+    }, 502);
+  }
+  const csv = (k) => new Set((url?.searchParams.get(k) ?? '')
+    .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean));
+  const top100 = csv('top100');
+  const capBases = top100.size ? top100 : null;
+  const exclude = csv('exclude');
+
+  const { source, tickers } = res.val;
+  const candles = source === 'OKX SWAP' ? okxCandles : bybitCandles;
+  const j = fetcher(60);
+  const once = (u, o = {}) => j(u, { ...o, retry: false });
+
+  const items = await Promise.all(
+    selectUniverse(tickers, CANDIDATES, capBases, exclude).map(async (t) => {
+      const head = { base: t.base, turnover24h: t.turnover24h, last: t.last };
+      try {
+        const { bars } = await candles(resolvePair(t.base), now, CANDIDATES.bars, once);
+        return { ...head, ...anchoredRange(bars, t.last, { ...ANCHORED, swingWidth: CANDIDATES.swingWidth }) };
+      } catch (e) {
+        return {
+          ...head, side: null, protected: null, extreme: null, pctOfRange: null,
+          distToProtectedPct: null, bosAgeBars: null, status: 'error', detail: e.message,
+        };
+      }
+    }),
+  );
+
+  return json({
+    ts: now, source,
+    criterion: { turnoverFloor: CANDIDATES.floor, swingWidth: CANDIDATES.swingWidth },
+    universeFiltered: capBases != null,
+    excluded: [...exclude],
+    items: sortCandidates(items),
+  });
+}
+
 const DIGEST_LOOKBACK_HOURS = 6;
 
 async function sendTelegramMessage(env, chatId, text) {
@@ -496,6 +555,7 @@ export default {
     if (url.pathname === '/ltf') return handleLtf(url);
     if (url.pathname === '/candles') return handleCandles(url);
     if (url.pathname === '/movers') return handleMovers(url);
+    if (url.pathname === '/candidates') return handleCandidates(url);
     return handleAsset(url);
   },
 };

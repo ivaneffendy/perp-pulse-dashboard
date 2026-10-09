@@ -25,6 +25,9 @@ Phone browser (GitHub Pages, static, no build step)
   │    └─ Binance fapi DIRECT from the device (hybrid client-side enrichment)
   ├─ GET /movers              ─▶ Worker ─▶ Bybit ALL tickers (1 call, OKX fallback)
   │       └─ awareness-only — rides the same Refresh press, never scored
+  ├─ GET /candidates          ─▶ Worker ─▶ tickers (1) + 4H klines per coin (≤ 20,
+  │       │                      same venue as the tickers, no retries)
+  │       └─ pre-screen: 4H trend + pullback into the anchored range, never scored
   ├─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
   │    └─ ON DEMAND ONLY — a button press, never the refresh loop
   ├─ GET /candles?symbol=X   ─▶ Worker ─▶ Bybit 4H klines (1 call, OKX fallback)
@@ -78,6 +81,7 @@ worker/src/
   sources/          bybit · okx · binance · macro · mktnews  (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
                     · absorption  (§IV Step 2, /ltf only) · regime · movers
+                    · anchored · candidates  (/candidates pre-screen — never scored)
                     · orderblock · liquidity  (chart overlay only — never scored)
                     · digest  (/telegram "what's driving price" — never scored)
   score.js          §VII bias engine        ─┐ four separate questions,
