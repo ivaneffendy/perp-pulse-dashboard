@@ -1,0 +1,46 @@
+worker/test/candidates-ui.test.js
+  b04ff7048e1a8494 3-6,34,60-109
+src/main.js
+  b04ff7048e1a8494 1,6,120-124,128-132,134-151,303-305,349-352,388,402
+worker/src/compute/liquidity.js
+  b04ff7048e1a8494 9
+index.html
+  b04ff7048e1a8494 30,56-59
+src/marketcap.js
+  b04ff7048e1a8494 2,51-53
+src/candidates.js
+  b04ff7048e1a8494 16-29,31,33-36,38,44-45,51,57-58
+src/api.js
+  b04ff7048e1a8494 50,52-54
+worker/src/sources/okx.js
+  b04ff7048e1a8494 151
+styles.css
+  b04ff7048e1a8494 152,158-169,180
+worker/src/index.js
+  b04ff7048e1a8494 112,417-420
+CLAUDE.md
+  b04ff7048e1a8494 28-29,70,72,83,90,130-140,314,318-321,350-353,355-359,446
+worker/src/sources/bybit.js
+  b04ff7048e1a8494 123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "0c35451dd94249ce9acbdec503e58b816c5f30d5",
+  "prompts": {
+    "b04ff7048e1a8494": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "556229b3-0b66-48b7-b80b-5a9be00f8755",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 192,
+      "total_deletions": 198,
+      "accepted_lines": 187,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/9ae9b413dcba6a4a8b2189fe1898ff1663bcb560859f1afc7d2de3bf596ae5d2"
+    }
+  }
+}
