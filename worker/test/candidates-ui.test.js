@@ -55,6 +55,16 @@ test('an unfiltered universe shows the warning banner', () => {
   assert.doesNotMatch(candidatesHtml(body([item()])), /unfiltered/);
 });
 
+test('/candidates is requested only after the matrix fan-out settles', () => {
+  // Its 20-call kline burst from the same edge, concurrent with the /asset
+  // pool, is the burst shape api.js documents taking out several matrix rows.
+  const src = readFileSync(new URL('../../src/main.js', import.meta.url), 'utf8');
+  const matrixAt = src.indexOf('await fetchMatrix(');
+  const candidatesAt = src.indexOf('.then(fetchCandidates)');
+  assert.ok(matrixAt > 0 && candidatesAt > 0);
+  assert.ok(candidatesAt > matrixAt, 'fetchCandidates must fire after await fetchMatrix(...)');
+});
+
 test('the frontend candidates module stays non-interactive and never renders grading fields', () => {
   const src = readFileSync(new URL('../../src/candidates.js', import.meta.url), 'utf8');
   assert.ok(!/addEventListener|onclick/i.test(src));

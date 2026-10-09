@@ -296,11 +296,10 @@ async function load() {
   // same reason as dominance) and relayed into /movers as ?top100= — a
   // failed/uncached lookup resolves to null, which just leaves the Worker's
   // whole-market ranking in place instead of blanking the tab.
-  // One top-100 lookup feeds both lists. Candidates rides the same
-  // fire-and-forget path: a slow /candidates must never delay Phase 1 either.
+  // One top-100 lookup feeds both lists. /candidates is fired later, after
+  // the matrix fan-out settles — see below.
   const top100 = fetchTop100Bases().catch(() => null);
   top100.then(fetchMovers).then(renderMovers, () => renderMovers(null));
-  top100.then(fetchCandidates).then(renderCandidates, () => renderCandidates(null));
 
   // Chart candles are cached by symbol (see chart.js) so switching symbols or
   // re-opening the tab never re-asks OKX — only a real Refresh press does.
@@ -344,6 +343,11 @@ async function load() {
     rows.set(base, node);
   });
   sortRows(matrix);
+
+  // Not awaited, and only now: its ~20-call kline burst from the same edge,
+  // overlapping the /asset pool, is the burst shape that took out several
+  // matrix rows at once (see POOL in api.js).
+  top100.then(fetchCandidates).then(renderCandidates, () => renderCandidates(null));
 
   if (anyOk) {
     lastGood = Date.now();
