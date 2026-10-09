@@ -12,10 +12,10 @@ async function withFetch(impl, fn) {
 }
 
 const bybitList = () => [
-  { symbol: 'BTCUSDT', price24hPcnt: '0.01', turnover24h: '900000000' },
-  { symbol: 'ARBUSDT', price24hPcnt: '0.22', turnover24h: '80000000' },
-  { symbol: 'DUSTUSDT', price24hPcnt: '0.90', turnover24h: '10000' }, // below floor
-  { symbol: 'BTCPERP', price24hPcnt: '0.01', turnover24h: '900000000' }, // not USDT-suffixed
+  { symbol: 'BTCUSDT', price24hPcnt: '0.01', turnover24h: '900000000', lastPrice: '84000' },
+  { symbol: 'ARBUSDT', price24hPcnt: '0.22', turnover24h: '80000000', lastPrice: '0.41' },
+  { symbol: 'DUSTUSDT', price24hPcnt: '0.90', turnover24h: '10000', lastPrice: '0.001' }, // below floor
+  { symbol: 'BTCPERP', price24hPcnt: '0.01', turnover24h: '900000000', lastPrice: '84000' }, // not USDT-suffixed
 ];
 
 const okxList = () => [

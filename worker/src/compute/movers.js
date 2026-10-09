@@ -35,7 +35,13 @@ export function rankMovers(tickers, opts = MOVERS, capBases = null) {
   return tickers
     .filter((x) => x.base !== 'BTC' && x.turnover24h >= opts.floor)
     .filter((x) => !capBases || capBases.has(x.base))
-    .map((x) => ({ ...x, rel: x.pct24h - btcPct }))
+    // Explicit keys, not a spread: tickers carry more than Movers shows
+    // (`last`, for /candidates), and every extra key would leak into this
+    // awareness-only response.
+    .map((x) => ({
+      base: x.base, pct24h: x.pct24h, turnover24h: x.turnover24h,
+      rel: x.pct24h - btcPct,
+    }))
     .sort((a, b) => Math.abs(b.rel) - Math.abs(a.rel))
     .slice(0, opts.top);
 }

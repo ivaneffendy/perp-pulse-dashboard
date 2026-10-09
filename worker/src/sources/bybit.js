@@ -134,6 +134,7 @@ export async function bybitTickers(j) {
       base: t.symbol.replace(/USDT$/, ''),
       pct24h: +t.price24hPcnt * 100,
       turnover24h: +t.turnover24h,
+      last: +t.lastPrice,
     }))
     .filter((t) => Number.isFinite(t.pct24h) && Number.isFinite(t.turnover24h) && VALID_BASE.test(t.base));
   if (!tickers.length) throw new Error('Bybit returned no USDT linear tickers');

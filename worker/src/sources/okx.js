@@ -169,6 +169,7 @@ export async function okxTickers(j) {
         base: t.instId.replace(/-USDT-SWAP$/, ''),
         pct24h: open ? (last / open - 1) * 100 : NaN,
         turnover24h: volCcy * last,
+        last,
       };
     })
     .filter((t) => Number.isFinite(t.pct24h) && Number.isFinite(t.turnover24h) && VALID_BASE.test(t.base));
