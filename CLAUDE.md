@@ -69,6 +69,8 @@ src/
   matrix.js         Phase 1 grid + score chips
   detail.js         Phase 2 panel
   movers.js         Movers tab render — awareness-only, no score, no click
+  candidates.js     Candidates section render (top of the Movers tab) — pre-screen, no click
+  lists.js          WATCHLIST / NO_TRADE pair names, mirrored from the playbook's §II
   marketcap.js      top-100-by-market-cap allowlist for Movers, device-fetched
   chart.js          Chart tab — 4H candles + POI overlay + liquidity rail,
                     candles via the Worker

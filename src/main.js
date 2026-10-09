@@ -1,9 +1,10 @@
-import { fetchMatrix, fetchAsset, fetchMacro, fetchMovers } from './api.js';
+import { fetchMatrix, fetchAsset, fetchMacro, fetchMovers, fetchCandidates } from './api.js';
 import { renderRow, sortRows } from './matrix.js';
 import { renderDetail } from './detail.js';
 import { renderWeather, initEtfToggle, fetchDominance } from './weather.js';
 import { enrichBinance } from './binance-enrich.js';
 import { renderMovers } from './movers.js';
+import { renderCandidates } from './candidates.js';
 import { fetchTop100Bases } from './marketcap.js';
 import { renderChart, invalidateChartCache } from './chart.js';
 import { VALID_BASE } from '../worker/src/pairs.js';
@@ -295,9 +296,11 @@ async function load() {
   // same reason as dominance) and relayed into /movers as ?top100= — a
   // failed/uncached lookup resolves to null, which just leaves the Worker's
   // whole-market ranking in place instead of blanking the tab.
-  fetchTop100Bases().catch(() => null)
-    .then(fetchMovers)
-    .then(renderMovers, () => renderMovers(null));
+  // One top-100 lookup feeds both lists. Candidates rides the same
+  // fire-and-forget path: a slow /candidates must never delay Phase 1 either.
+  const top100 = fetchTop100Bases().catch(() => null);
+  top100.then(fetchMovers).then(renderMovers, () => renderMovers(null));
+  top100.then(fetchCandidates).then(renderCandidates, () => renderCandidates(null));
 
   // Chart candles are cached by symbol (see chart.js) so switching symbols or
   // re-opening the tab never re-asks OKX — only a real Refresh press does.

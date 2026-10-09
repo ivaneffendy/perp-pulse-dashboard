@@ -1,3 +1,5 @@
+import { NO_TRADE } from './lists.js';
+
 const params = new URLSearchParams(location.search);
 if (params.get('api')) localStorage.setItem('ppd_api', params.get('api'));
 
@@ -56,6 +58,13 @@ export const fetchLtf = (base, side = null) => get('/ltf', { symbol: base, side 
  * default whole-market ranking in place.
  */
 export const fetchMovers = (top100Bases = null) => get('/movers', { top100: top100Bases });
+
+/**
+ * Candidates pre-screen (4H trend + pullback into the anchored range). Same
+ * ?top100= relay as fetchMovers; the no-trade list rides along as ?exclude=.
+ */
+export const fetchCandidates = (top100Bases = null) =>
+  get('/candidates', { top100: top100Bases, exclude: NO_TRADE.join(',') });
 
 /**
  * Fan out one request per asset. Deliberately NOT a single /matrix call: a
