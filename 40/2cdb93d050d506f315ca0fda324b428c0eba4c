@@ -1,0 +1,40 @@
+worker/test/anchored.test.js
+  b04ff7048e1a8494 1-161
+worker/src/compute/anchored.js
+  b04ff7048e1a8494 1-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.23",
+  "base_commit_sha": "402cdb93d050d506f315ca0fda324b428c0eba4c",
+  "prompts": {
+    "34617105474e6a18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f3e25b8e-0a98-4c49-9c30-dec8d6473e70",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 378,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/e964695fac3b622016ce27164d6104a28f7a4b3adbb0712278a4fb25e4807414"
+    },
+    "b04ff7048e1a8494": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "556229b3-0b66-48b7-b80b-5a9be00f8755",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "ivaneffendy <26227354+ivaneffendy@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 303,
+      "total_deletions": 1,
+      "accepted_lines": 302,
+      "overriden_lines": 0,
+      "messages_url": "https://usegitai.com/cas/d310e799804f42b75bd41ec2ae74b666c294345c48e68c269c7e9aa7f885ed83"
+    }
+  }
+}
