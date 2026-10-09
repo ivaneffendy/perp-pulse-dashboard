@@ -101,6 +101,53 @@ test('one close clearing two swing highs breaks both, so the protected low canno
   assert.equal(r.bosAgeBars, 1);
 });
 
+// A pullback inside leg A that prints its own width-3 lower high (112 at i18,
+// known from i22), then closes above it at i23 — still below the leg's HH 120.
+const PULLBACK = [
+  [108, 101, 102], [106, 99, 100], [107, 100, 106], [112, 104, 108],
+  [109, 100, 101], [106, 97, 98], [104, 96, 100], [110, 99, 109], [114, 106, 113],
+];
+
+test('closing above a lower high inside the pullback does not re-anchor the leg', () => {
+  const r = anchoredRange(mk([...A, ...PULLBACK]), 108, OPTS);
+  assert.equal(r.side, 'long');
+  assert.equal(r.protected, 90);
+  assert.equal(r.extreme, 120);
+});
+
+test('a deeper dip after that lower-high break stays an in-zone long, not broken', () => {
+  const r = anchoredRange(mk([...A, ...PULLBACK, [112, 100, 101]]), 95, OPTS);
+  assert.equal(r.side, 'long');
+  assert.equal(r.status, 'in_zone');
+  close(r.pctOfRange, (95 - 90) / 30 * 100);
+});
+
+test('a close above the protected low after that lower-high break does not flip short', () => {
+  const r = anchoredRange(mk([...A, ...PULLBACK, [112, 100, 101], [102, 93, 94]]), 94, OPTS);
+  assert.equal(r.side, 'long');
+  assert.equal(r.protected, 90);
+  assert.equal(r.status, 'in_zone');
+});
+
+test('the bar after a flip does not fire a fake break off old-trend swings', () => {
+  // Internal low 104 (i14) sits above the flip close; it must not be a fresh
+  // short-side target on the next bar.
+  const r = anchoredRange(mk([...A,
+    [108, 105, 107], [110, 106, 109], [111, 107, 110], [109, 100, 101],
+    [100, 86, 87], [90, 84, 86],
+  ]), 86, OPTS);
+  assert.equal(r.side, 'short');
+  assert.equal(r.protected, 120);
+  assert.equal(r.bosAgeBars, 1);
+});
+
+test('the old protected low is spent by the flip, so the next lower close is not a new break', () => {
+  const r = anchoredRange(mk([...A, [106, 85, 87], [90, 84, 86]]), 86, OPTS);
+  assert.equal(r.side, 'short');
+  assert.equal(r.protected, 120);
+  assert.equal(r.bosAgeBars, 1);
+});
+
 test('the short side mirrors the long side', () => {
   const mirror = A.map(([h, l, c]) => [200 - l, 200 - h, 200 - c]);
   const r = anchoredRange(mk(mirror), 96, OPTS);
@@ -140,11 +187,13 @@ test('regression: BTC 4H ending 2026-10-07 02:42Z', () => {
   const bars = normalizeKlines(raw, INTERVAL_4H, Date.parse('2026-10-07T02:42:21Z'));
   const last = +raw[0][4]; // the forming bar's close is the live price
   const r = anchoredRange(bars, last);
+  // The leg's HH is 87,383.6 (09-21); 10-02's 87,242.2 is a lower high inside
+  // the pullback, so its break is internal and the anchor stays at 09-20's low.
   assert.equal(r.side, 'long');
-  assert.equal(r.protected, 83107.7);
-  assert.equal(r.extreme, 87242.2);
-  assert.equal(r.pctOfRange.toFixed(1), '24.6');
-  assert.equal(r.status, 'in_zone');
+  assert.equal(r.protected, 80092.3);
+  assert.equal(r.extreme, 87383.6);
+  assert.equal(r.pctOfRange.toFixed(1), '55.3');
+  assert.equal(r.status, 'outside');
 });
 
 test('anchored and candidates are never referenced by the scoring engines', () => {

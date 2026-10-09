@@ -56,25 +56,27 @@ ticker's last price. The forming bar is already dropped by `normalizeKlines`.
 
 1. **Swings.** Fractal highs and lows at **width 3**: a bar's high exceeds the
    highs of the 3 bars on each side (lows mirrored). A swing becomes known only
-   once 3 bars after it have closed. Width 3 was chosen against a real case:
-   on BTC 4H ending 2026-10-07 02:42Z, width 2 (the `mode.js` fractal) took a
-   minor dip as the protected low (30 swing highs in 33 days, internal
-   structure). Widths 3, 4 and 5 all gave 83,107.7 → 87,242.2, against a
-   hand-drawn 83,200 → 87,200. Width 3 is the smallest width that agrees. One
-   datapoint, a sanity check and not a calibration.
+   once 3 bars after it have closed. Width 3 was approved in session. On BTC
+   4H ending 2026-10-07 02:42Z, widths 2–5 all give the same range under the
+   final rules (see the regression row in §3), so the choice is not
+   load-bearing on that case. An earlier claim that width 3 "matched a
+   hand-drawn 83,200 → 87,200" came from prototypes that broke internal
+   structure, below; the drawn range was the internal leg.
 2. **BOS.** Two kinds, and only two:
-   - **With-trend:** a bar whose **body closes** beyond the most recent known,
-     not-yet-broken swing in the trend's direction. That close marks **every**
-     known swing it closed beyond as broken, not just the most recent one.
-     Without this, the next bars "break" older swings price had already
-     cleared, and the protected point slides back to older lows. A first
-     prototype did exactly that and put BTC's protected low at 82,722, not
-     83,107.7.
+   - **With-trend:** a bar whose **body closes** beyond the leg's extreme
+     swing: the **highest** known, not-yet-broken swing high after the
+     protected low (lowest swing low after the protected high, for shorts).
+     Never just the most recent swing: inside a pullback that is a lower
+     high, and breaking it would drag the anchor into the pullback. That
+     close marks **every** known swing it closed beyond as broken, not just
+     the target. Without this, the next bars "break" older swings price had
+     already cleared, and the protected point slides back to older lows.
    - **Counter-trend (the flip):** a body close through the **protected
      point**. A close below an internal swing low that sits above the
      protected low is *not* a break. The discount half lies above the
      protected low by construction, and that is the pullback being screened
-     for.
+     for. The flip close also marks every old-trend swing it cleared as
+     broken, so the bar after a flip cannot fire a fake break off them.
    - **Bootstrap:** before any BOS exists, the first close beyond a known
      unbroken swing on either side sets the side.
 3. **Protected point.** For an up-BOS that broke swing high *H*: the lowest
@@ -191,7 +193,7 @@ ADA   —      broken                                        $101M  off-list
 | file | covers |
 |---|---|
 | `anchored.test.js` | Synthetic bars for: an up-BOS with the protected low at the leg-origin wick; the latest extreme and the live-price extension; re-anchoring on a new same-side BOS; a body close through the protected point flipping the side; a wick through it without a close not flipping (`broken` when the live price is through); the forming bar ignored; width 3 needing 3 confirming bars each side; no BOS giving `unclear`; the short-side mirror |
-| `anchored.test.js`, real-data regression | A committed fixture of BTCUSDT 4H market klines ending 2026-10-07 02:42Z must give side `long`, protected **83,107.7**, extreme **87,242.2**, `pctOfRange` **24.6** (one decimal), `in_zone`. Market data only |
+| `anchored.test.js`, real-data regression | A committed fixture of BTCUSDT 4H market klines ending 2026-10-07 02:42Z must give side `long`, protected **80,092.3**, extreme **87,383.6**, `pctOfRange` **55.3** (one decimal), `outside`. The 2026-10-02 high of 87,242.2 is a lower high inside the pullback, so its break is internal. Market data only |
 | `candidates.test.js` | With stubbed fetch: the turnover floor, the top-100 filter, `exclude`, the 20-coin cap, every kline request on the tickers' venue, a failed coin returned as `error`, `universeFiltered: false` without `top100`, the sort order, and a subrequest count ≤ 22 |
 | guard | Source inspection: no scoring module imports `anchored.js` |
 | tickers | `last` is present on both venues' normalised tickers |
@@ -204,11 +206,12 @@ operator's drawn range high/low with this module's protected/extreme at the
 read's timestamp. A persistent disagreement means this code is wrong, not the
 marking. The comparison is recorded in the private vault, not here.
 
-The known disagreement shape is already visible on the regression case: the
-list would have shown BTC as an in-zone long at 24.6%, while the chart read
-refused it on HTF structure, citing 1H lower highs. 4H structure at width 3
-had not broken. That is correct behaviour for a 4H pre-screen, and the UI copy
-says so.
+The regression case shows how the two can still differ: the list reads BTC
+as a long *outside* the zone (55%) on external 4H structure, and the chart
+read refused it on HTF structure too, but citing 1H lower highs. The drawn
+range there was the internal leg (83,200 → 87,200), not the R25 range. When
+the list and a drawn range disagree in this way, check which leg was drawn
+before concluding the code is wrong.
 
 ## Open items, owned elsewhere
 

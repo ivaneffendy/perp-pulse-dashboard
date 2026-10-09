@@ -49,6 +49,13 @@ const highestIdx = (bars, a, b) => {
   return p;
 };
 
+/** The most extreme swing index after `from` by `better`, or undefined. */
+const extremeSince = (idx, from, better) => {
+  let p;
+  for (const x of idx) if (x > from && (p === undefined || better(x, p))) p = x;
+  return p;
+};
+
 /**
  * One pass over closed bars. Returns `{ side, prot, bos }` (prot and bos are
  * bar indices) after the last bar, or null if no break ever printed.
@@ -70,13 +77,21 @@ function structure(bars, w) {
     const c = bars[i].c;
     let ev = null;
     if (st?.side === 'long' && c < bars[st.prot].l) {
+      // The flip close spends every old-trend low it cleared (the protected
+      // low included); left unbroken, they fire a fake break on the next bar.
+      for (const x of known(lows, brokenL, i)) if (bars[x].l > c) brokenL.add(x);
       ev = { side: 'short', from: st.prot };
     } else if (st?.side === 'short' && c > bars[st.prot].h) {
+      for (const x of known(highs, brokenH, i)) if (bars[x].h < c) brokenH.add(x);
       ev = { side: 'long', from: st.prot };
     } else {
       if (st?.side !== 'short') {
         const kh = known(highs, brokenH, i);
-        const j = kh.at(-1);
+        // In a trend the target is the leg's HH — the highest unbroken swing
+        // since the protected low — never just the most recent one, which
+        // inside a pullback is a lower high and would drag the anchor into
+        // the pullback. With no side yet, the most recent swing bootstraps.
+        const j = st ? extremeSince(kh, st.prot, (x, y) => bars[x].h > bars[y].h) : kh.at(-1);
         if (j != null && c > bars[j].h) {
           // Mark EVERY swing this close cleared, or the next bars "break"
           // older swings price already left behind and the protected low
@@ -87,7 +102,7 @@ function structure(bars, w) {
       }
       if (!ev && st?.side !== 'long') {
         const kl = known(lows, brokenL, i);
-        const j = kl.at(-1);
+        const j = st ? extremeSince(kl, st.prot, (x, y) => bars[x].l < bars[y].l) : kl.at(-1);
         if (j != null && c < bars[j].l) {
           for (const x of kl) if (bars[x].l > c) brokenL.add(x);
           ev = { side: 'short', from: j };
