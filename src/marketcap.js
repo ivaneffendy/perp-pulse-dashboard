@@ -1,5 +1,5 @@
 /**
- * Top-100-by-market-cap allowlist for the Movers tab, fetched FROM THE
+ * Top-100-by-market-cap allowlist for the Candidates tab, fetched FROM THE
  * DEVICE — same reason as dominance in weather.js: every free market-cap API
  * rate-limits by IP, and Cloudflare's Worker egress IPs are shared across all
  * Workers customers, so the quota is gone before the Worker ever calls. The
@@ -48,9 +48,9 @@ function writeCache(bases) {
 /**
  * Returns a comma-joined string of up to 100 uppercase base tickers, or null
  * if no vendor answered and nothing usable is cached — in which case the
- * Movers tab falls back to its prior unfiltered (whole-market) behavior
- * rather than showing nothing, exactly like a failed dominance fetch falls
- * back to the Worker's own macro reading.
+ * Worker screens unfiltered and the Candidates tab shows a warning banner,
+ * rather than showing nothing — like a failed dominance fetch falls back to
+ * the Worker's own macro reading.
  */
 export async function fetchTop100Bases() {
   const cached = readCache();

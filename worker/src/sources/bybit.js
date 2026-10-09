@@ -120,7 +120,7 @@ export async function bybitDeep(sym, j) {
 }
 
 /**
- * ALL linear USDT tickers in ONE call — for the /movers screener. Unlike
+ * ALL linear USDT tickers in ONE call — for the /candidates screener. Unlike
  * every other function in this file, this scans the whole market rather than
  * one symbol: Bybit's tickers endpoint returns every listed symbol's 24h
  * stats in a single response whether `symbol=` is given or not.

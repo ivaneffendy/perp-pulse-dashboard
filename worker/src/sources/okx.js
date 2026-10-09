@@ -148,7 +148,7 @@ export async function okxExtras(sym, j) {
 }
 
 /**
- * ALL USDT-margined SWAP tickers in ONE call — /movers fallback when Bybit's
+ * ALL USDT-margined SWAP tickers in ONE call — /candidates fallback when Bybit's
  * CDN geo-blocks this edge. Two things this endpoint does NOT give directly:
  *
  * 1. No 24h %-change field — derived from open24h/last, same arithmetic as

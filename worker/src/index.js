@@ -21,7 +21,6 @@ import { nearestUnmitigatedFvg } from './compute/fvg.js';
 import { sweepState } from './compute/sweep.js';
 import { marketMode } from './compute/mode.js';
 import { regime } from './compute/regime.js';
-import { rankMovers, MOVERS } from './compute/movers.js';
 import { anchoredRange, ANCHORED } from './compute/anchored.js';
 import { selectUniverse, sortCandidates, CANDIDATES } from './compute/candidates.js';
 import { scoreAsset } from './score.js';
@@ -110,7 +109,7 @@ async function attempt(fn) {
 
 /**
  * Bybit-primary/OKX-fallback attempt, shared by every route that offers this
- * exact venue pair (handleLtf, handleMovers — NOT handleAsset, which has its
+ * exact venue pair (handleLtf, handleCandidates — NOT handleAsset, which has its
  * own differently-shaped fallback: `upstream` vs `detail`, plus "not listed"
  * branching and a `fellBack` flag the caller needs downstream). On double
  * failure, `err` names both venues so the 502 body is never ambiguous about
@@ -412,37 +411,13 @@ export async function handleCandles(url) {
 }
 
 /**
- * Cross-market movers, awareness-only — see compute/movers.js and CLAUDE.md.
- * One call regardless of universe size: Bybit's tickers endpoint returns
- * every symbol's 24h stats at once, unlike every other route here.
- *
- * `?top100=BTC,ETH,...` is an optional cap-rank allowlist. Market-cap data
- * can't be fetched from the Worker itself — same shared-egress-IP rate-limit
- * problem as dominance (CLAUDE.md) — so the browser fetches it client-side
- * (src/marketcap.js) and relays it here, exactly like the `?etf=` override
- * relays a client-fetched number into the scored asset request.
- */
-export async function handleMovers(url = null) {
-  const now = Date.now();
-  const res = await withFallback(
-    () => bybitTickers(fetcher(30)),
-    () => okxTickers(fetcher(30)),
-  );
-  if (!res.ok) {
-    return json({
-      ts: now, error: 'No venue could serve market tickers',
-      detail: res.err,
-    }, 502);
-  }
-  const raw = url?.searchParams.get('top100');
-  const capBases = raw ? new Set(raw.split(',').filter(Boolean)) : null;
-  const { source, tickers } = res.val;
-  return json({ ts: now, source, items: rankMovers(tickers, MOVERS, capBases) });
-}
-
-/**
  * Candidates pre-screen — 4H trend + pullback into the anchored range. See
  * compute/anchored.js and docs/superpowers/specs/2026-10-09-candidates-screener-design.md.
+ *
+ * `?top100=BTC,ETH,...` is the cap-rank allowlist. Market-cap data can't be
+ * fetched from the Worker itself — same shared-egress-IP rate-limit problem as
+ * dominance (CLAUDE.md) — so the browser fetches it (src/marketcap.js) and
+ * relays it here, like the `?etf=` override.
  *
  * Every kline comes from the venue that served the tickers, so the turnover
  * criterion and the structure are read off the same book. Klines go out with
@@ -554,7 +529,6 @@ export default {
     if (url.pathname === '/macro') return handleMacro(url);
     if (url.pathname === '/ltf') return handleLtf(url);
     if (url.pathname === '/candles') return handleCandles(url);
-    if (url.pathname === '/movers') return handleMovers(url);
     if (url.pathname === '/candidates') return handleCandidates(url);
     return handleAsset(url);
   },

@@ -47,21 +47,11 @@ export const fetchMacro = () => get('/macro', {});
 export const fetchLtf = (base, side = null) => get('/ltf', { symbol: base, side });
 
 /**
- * Awareness-only cross-market screener. Rides the normal manual-refresh
- * cadence — no separate timer, unlike /ltf which is deliberately excluded
- * from every automatic path.
- *
+ * Candidates pre-screen (4H trend + pullback into the anchored range).
  * `top100Bases` is a comma-joined allowlist fetched client-side (see
- * src/marketcap.js) and relayed to the Worker as `?top100=`, the same
- * pattern `?etf=` uses to keep the ranking itself server-side. Omitted when
- * the device couldn't reach a market-cap vendor, which leaves the Worker's
- * default whole-market ranking in place.
- */
-export const fetchMovers = (top100Bases = null) => get('/movers', { top100: top100Bases });
-
-/**
- * Candidates pre-screen (4H trend + pullback into the anchored range). Same
- * ?top100= relay as fetchMovers; the no-trade list rides along as ?exclude=.
+ * src/marketcap.js) and relayed as `?top100=`, the same pattern `?etf=` uses.
+ * Omitted when no market-cap vendor answered; the Worker then screens
+ * unfiltered and says so. The no-trade list rides along as ?exclude=.
  */
 export const fetchCandidates = (top100Bases = null) =>
   get('/candidates', { top100: top100Bases, exclude: NO_TRADE.join(',') });

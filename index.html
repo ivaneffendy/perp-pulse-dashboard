@@ -27,7 +27,7 @@
 
 <nav class="tabs" role="tablist">
   <button id="tab-matrix" class="tab active" role="tab" aria-selected="true">Matrix</button>
-  <button id="tab-movers" class="tab" role="tab" aria-selected="false">Movers</button>
+  <button id="tab-candidates" class="tab" role="tab" aria-selected="false">Candidates</button>
   <button id="tab-chart" class="tab" role="tab" aria-selected="false">Chart</button>
 </nav>
 
@@ -53,16 +53,10 @@
   </details>
 </div>
 
-<section id="view-movers" hidden>
-  <h3 class="cand-title">Candidates</h3>
-  <p class="movers-note">4H trend + pullback into the anchored range — ≥ $100M turnover, top 100 by market cap. A pre-screen: the chart read decides. <b>off-list</b> = outside the current watchlist.</p>
-  <div id="candidates-list" class="movers-list">
-    <p class="movers-empty">Press Refresh to load.</p>
-  </div>
-  <h3 class="cand-title movers-gap">Movers</h3>
-  <p class="movers-note">Awareness only — top 100 by market cap, ranked by move vs BTC. Not a score, not clickable, not a signal to trade any of these.</p>
-  <div id="movers-list" class="movers-list">
-    <p class="movers-empty">Press Refresh to load.</p>
+<section id="view-candidates" hidden>
+  <p class="cand-note">4H trend + pullback into the anchored range — ≥ $100M turnover, top 100 by market cap. A pre-screen: the chart read decides. <b>off-list</b> = outside the current watchlist. Loads when this tab opens; Refresh here reloads it.</p>
+  <div id="candidates-list" class="cand-list">
+    <p class="cand-empty">Loading…</p>
   </div>
 </section>
 

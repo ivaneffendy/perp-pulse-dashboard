@@ -151,7 +151,6 @@ test('liquidity pools are never referenced by any scoring engine', () => {
   for (const p of [
     '../src/score.js', '../src/verdict.js',
     '../src/compute/absorption.js', '../src/compute/regime.js',
-    '../src/compute/movers.js',
   ]) {
     const src = readFileSync(new URL(p, import.meta.url), 'utf8');
     assert.ok(

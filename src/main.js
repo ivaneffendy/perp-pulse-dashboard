@@ -1,10 +1,9 @@
-import { fetchMatrix, fetchAsset, fetchMacro, fetchMovers, fetchCandidates } from './api.js';
+import { fetchMatrix, fetchAsset, fetchMacro, fetchCandidates } from './api.js';
 import { renderRow, sortRows } from './matrix.js';
 import { renderDetail } from './detail.js';
 import { renderWeather, initEtfToggle, fetchDominance } from './weather.js';
 import { enrichBinance } from './binance-enrich.js';
-import { renderMovers } from './movers.js';
-import { renderCandidates } from './candidates.js';
+import { renderCandidates, shouldFetchCandidates } from './candidates.js';
 import { fetchTop100Bases } from './marketcap.js';
 import { renderChart, invalidateChartCache } from './chart.js';
 import { VALID_BASE } from '../worker/src/pairs.js';
@@ -118,26 +117,38 @@ function closeDetail() {
 }
 
 /**
- * Pure visibility toggle between Matrix, Movers and Chart. Deliberately does
- * not fetch anything on its own for Matrix/Movers — both ride the normal
- * Refresh cadence (see load()), and a fetch-on-switch would undermine the
- * "manual refresh only" contract the rest of this file enforces for every
- * other data source. Chart is the one exception: it is fetched on-demand
- * (see renderChartTab) because pre-loading candles for a symbol nobody is
- * looking at would just burn OKX calls for nothing.
+ * Visibility toggle between Matrix, Candidates and Chart. Matrix never fetches
+ * on switch — it rides the Refresh cadence (see load()). Chart and Candidates
+ * are fetched on demand, because pre-loading them for a tab nobody is looking
+ * at just burns exchange calls: Chart one symbol's candles (renderChartTab),
+ * Candidates ~21 calls (shouldFetchCandidates in candidates.js).
  */
 function selectTab(name) {
   activeTab = name;
-  $('view-matrix').hidden = name !== 'matrix';
-  $('view-movers').hidden = name !== 'movers';
-  $('view-chart').hidden = name !== 'chart';
-  $('tab-matrix').classList.toggle('active', name === 'matrix');
-  $('tab-movers').classList.toggle('active', name === 'movers');
-  $('tab-chart').classList.toggle('active', name === 'chart');
-  $('tab-matrix').setAttribute('aria-selected', String(name === 'matrix'));
-  $('tab-movers').setAttribute('aria-selected', String(name === 'movers'));
-  $('tab-chart').setAttribute('aria-selected', String(name === 'chart'));
+  for (const t of ['matrix', 'candidates', 'chart']) {
+    $(`view-${t}`).hidden = name !== t;
+    $(`tab-${t}`).classList.toggle('active', name === t);
+    $(`tab-${t}`).setAttribute('aria-selected', String(name === t));
+  }
   if (name === 'chart') renderChartTab();
+  if (shouldFetchCandidates({ trigger: 'open', activeTab, loaded: candidatesLoaded, inFlight: candidatesInFlight })) loadCandidates();
+}
+
+let candidatesLoaded = false;
+let candidatesInFlight = false;
+
+/** One /candidates fetch. The market-cap allowlist is fetched from this
+ *  device (see marketcap.js) and relayed as ?top100=; a failed lookup
+ *  resolves to null and the Worker flags the list as unfiltered. */
+function loadCandidates() {
+  candidatesInFlight = true;
+  fetchTop100Bases().catch(() => null)
+    .then(fetchCandidates)
+    .then(
+      (d) => { candidatesLoaded = true; renderCandidates(d, fmtWib(d.ts)); },
+      () => renderCandidates(null),
+    )
+    .finally(() => { candidatesInFlight = false; });
 }
 
 /** Draw `base`, dropping the result if the selection moved on mid-fetch. */
@@ -289,18 +300,9 @@ async function lookup(raw) {
   }
 }
 
-async function load() {
-  // Fired independently, not awaited: nothing downstream needs this before
-  // the matrix can start, and /movers being slow must never delay Phase 1.
-  // The market-cap allowlist is fetched from this device (see marketcap.js,
-  // same reason as dominance) and relayed into /movers as ?top100= — a
-  // failed/uncached lookup resolves to null, which just leaves the Worker's
-  // whole-market ranking in place instead of blanking the tab.
-  // One top-100 lookup feeds both lists. /candidates is fired later, after
-  // the matrix fan-out settles — see below.
-  const top100 = fetchTop100Bases().catch(() => null);
-  top100.then(fetchMovers).then(renderMovers, () => renderMovers(null));
-
+/** `trigger` is 'refresh' only from the Refresh button; every other caller
+ *  (5m timer, ETF toggle, tab return, boot) is 'auto'. */
+async function load(trigger = 'auto') {
   // Chart candles are cached by symbol (see chart.js) so switching symbols or
   // re-opening the tab never re-asks OKX — only a real Refresh press does.
   // Only the symbol actually on screen is re-fetched; the rest of the
@@ -344,10 +346,10 @@ async function load() {
   });
   sortRows(matrix);
 
-  // Not awaited, and only now: its ~20-call kline burst from the same edge,
-  // overlapping the /asset pool, is the burst shape that took out several
-  // matrix rows at once (see POOL in api.js).
-  top100.then(fetchCandidates).then(renderCandidates, () => renderCandidates(null));
+  // Not awaited, and only after the matrix: its ~20-call kline burst from the
+  // same edge, overlapping the /asset pool, is the burst shape that took out
+  // several matrix rows at once (see POOL in api.js).
+  if (shouldFetchCandidates({ trigger, activeTab, loaded: candidatesLoaded, inFlight: candidatesInFlight })) loadCandidates();
 
   if (anyOk) {
     lastGood = Date.now();
@@ -383,7 +385,7 @@ document.addEventListener('visibilitychange', () => {
   // Refetch on return ONLY if what is on screen has actually gone stale.
   if (Date.now() - lastGood > MIN_REFETCH_MS) load();
 });
-$('refresh').addEventListener('click', () => load());
+$('refresh').addEventListener('click', () => load('refresh'));
 // Canvas pixel dimensions are set at draw time from the container's current
 // width, so an orientation flip or a resize needs a redraw — from cache, no
 // refetch — or the chart keeps whatever size it was first drawn at. Debounced:
@@ -397,7 +399,7 @@ window.addEventListener('resize', () => {
   }, 150);
 });
 $('tab-matrix').addEventListener('click', () => selectTab('matrix'));
-$('tab-movers').addEventListener('click', () => selectTab('movers'));
+$('tab-candidates').addEventListener('click', () => selectTab('candidates'));
 $('tab-chart').addEventListener('click', () => selectTab('chart'));
 
 $('wl-input').addEventListener('keydown', (e) => {

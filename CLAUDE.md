@@ -23,11 +23,10 @@ Phone browser (GitHub Pages, static, no build step)
   │  … fanned out in parallel                  fired concurrently
   ├─ GET /asset?symbol=X&deep=1 ─▶ Worker ─▶ + OKX + Binance + Bybit book (~14)
   │    └─ Binance fapi DIRECT from the device (hybrid client-side enrichment)
-  ├─ GET /movers              ─▶ Worker ─▶ Bybit ALL tickers (1 call, OKX fallback)
-  │       └─ awareness-only — rides the same Refresh press, never scored
   ├─ GET /candidates          ─▶ Worker ─▶ tickers (1) + 4H klines per coin (≤ 20,
   │       │                      same venue as the tickers, no retries)
-  │       └─ pre-screen: 4H trend + pullback into the anchored range, never scored
+  │       └─ pre-screen: 4H trend + pullback into the anchored range, never scored.
+  │          ON DEMAND ONLY — opening the tab, or Refresh while it is open
   ├─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
   │    └─ ON DEMAND ONLY — a button press, never the refresh loop
   ├─ GET /candles?symbol=X   ─▶ Worker ─▶ Bybit 4H klines (1 call, OKX fallback)
@@ -68,10 +67,9 @@ src/
   api.js            Worker client: fan-out, 8s timeout, per-asset failure
   matrix.js         Phase 1 grid + score chips
   detail.js         Phase 2 panel
-  movers.js         Movers tab render — awareness-only, no score, no click
-  candidates.js     Candidates section render (top of the Movers tab) — pre-screen, no click
+  candidates.js     Candidates tab render + its fetch policy — pre-screen, no click
   lists.js          WATCHLIST / NO_TRADE pair names, mirrored from the playbook's §II
-  marketcap.js      top-100-by-market-cap allowlist for Movers, device-fetched
+  marketcap.js      top-100-by-market-cap allowlist for Candidates, device-fetched
   chart.js          Chart tab — 4H candles + POI overlay + liquidity rail,
                     candles via the Worker
   weather.js        BTC.D / USDT.D / TOTAL3 + manual ETF toggle
@@ -82,14 +80,14 @@ worker/src/
   pairs.js          allowlist + per-venue symbol mapping + VALID_BASE
   sources/          bybit · okx · binance · macro · mktnews  (fetch + normalize)
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
-                    · absorption  (§IV Step 2, /ltf only) · regime · movers
+                    · absorption  (§IV Step 2, /ltf only) · regime
                     · anchored · candidates  (/candidates pre-screen — never scored)
                     · orderblock · liquidity  (chart overlay only — never scored)
                     · digest  (/telegram "what's driving price" — never scored)
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (200 tests)
+worker/test/        node --test suites (228 tests)
 scripts/            journal backfills (R11 MFE, R11b SL counterfactual)
                     + their own node --test suites (20 tests)
 ```
@@ -129,16 +127,17 @@ right now?* It is rendered on its own and never enters the other three — §VII
 assigns no volatility row, and `worker/test/regime.test.js` asserts by source
 inspection that `score.js`, `verdict.js` and `absorption.js` never mention it.
 
-`compute/movers.js` sits OUTSIDE this four-question framework entirely — it is
-not per-asset and not scored, closer to how dominance is display-only. It
-ranks the whole market by relative strength vs BTC for the awareness-only
-Movers tab, and `worker/test/movers.test.js` asserts by source inspection that
-`score.js`, `verdict.js`, `absorption.js` and `regime.js` never mention it.
-This boundary is not just style: `docs/superpowers/specs/2026-09-06-movers-screener-design.md`
-records a documented, data-backed reason from the trading-vault (R7's Kevin
-Sailly addendum measured this exact screening pattern, used as a TRADING
-method, at -13.79R). Read that spec before adding any score, verdict, or
-click-through to a mover row.
+`compute/anchored.js` and `compute/candidates.js` sit OUTSIDE this
+four-question framework entirely — a cross-market pre-screen, not scored.
+`worker/test/anchored.test.js` asserts by source inspection that `score.js`,
+`verdict.js`, `absorption.js` and `regime.js` never import them. Spec:
+`docs/superpowers/specs/2026-10-09-candidates-screener-design.md`.
+
+**The Movers tab was removed 2026-10-09** (operator: not used once Candidates
+existed). It ranked by the size of the 24h move vs BTC, so its top rows were
+the most extended coins. `docs/superpowers/specs/2026-09-06-movers-screener-design.md`
+is kept as history; `git log -- worker/src/compute/movers.js` finds the
+removal commit if it is ever wanted back.
 
 ## Pairs
 `DEFAULT_WATCHLIST` is just the always-on anchors: BTC, ETH, SOL. The rest of
@@ -312,11 +311,14 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **Stale data greys the grid and shows a banner after 10 min.** Silently showing
   old prices as live is the worst failure this tool can have.
 - **Refresh is MANUAL by default — nothing fetches until you press the button.**
-  Not boot, not returning to the tab. **One deliberate exception:** opening the
+  Not boot, not returning to the tab. **Two deliberate exceptions:** opening the
   Chart tab, or picking a symbol in it, fetches that ONE symbol's candles
   on demand, because pre-loading candles for coins nobody is looking at would
   cost a request per watchlist entry per refresh. They are then cached until
-  the next Refresh press, so flipping tabs or symbols re-asks nothing. One refresh = 1 macro + 1 movers + N
+  the next Refresh press, so flipping tabs or symbols re-asks nothing. And
+  opening the Candidates tab fetches `/candidates` once (~21 exchange calls);
+  Refresh refetches it only while that tab is open, and the 5m timer never
+  does (`shouldFetchCandidates` in `src/candidates.js`). One refresh = 1 macro + N
   asset requests (~33 upstream exchange calls at N=8), and the binding
   constraint is never Cloudflare (auto at 5 min over an 8h day is ~860
   requests, under 1% of the 100k/day free limit) — it is the exchanges.
@@ -345,34 +347,16 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 - **`vol` is drawn only at/above the 90th percentile, and 90 is a DISPLAY cut.**
   It hides a chip; no rule keys off it. The full percentile is always in
   `signals.regime.pct`.
-- **The Movers tab's `$10M` turnover floor is a first guess, untuned against
-  data** — see `MOVERS` in `worker/src/compute/movers.js`. It is
-  awareness-only: no score, no click-through, and a permanent test guards it
-  out of the four scoring engines. Do not wire it into `score.js` without
-  re-reading `docs/superpowers/specs/2026-09-06-movers-screener-design.md`
-  first — that boundary exists because of a measured, not theoretical, R7
-  finding.
-- **Movers is a same-day snapshot, not a trend — coincident, same caveat as
-  `regime.js`.** It reports that a coin moved unusually against BTC over the
-  last 24h, never that the move is continuing or reversing. Turnover is also
-  venue-local (Bybit's or OKX's own book), the same caveat the RVOL work
-  already carries. It also does not implement Kevin Sailly's rotation-check
-  step (OTHERS.D vs TOTAL3, "are alts being bid at all") — the weather bar
-  already shows TOTAL3, and reading it that way is left to the trader rather
-  than automated here.
-- **Movers is capped to the top 100 coins by market cap**, on top of the
-  turnover floor above — otherwise established-but-thin-turnover names (LSK,
-  memecoins with a one-day pump) crowd out the majors the rel-strength scan
-  was meant to surface. The cap list can't be fetched from the Worker itself:
-  same shared-egress-IP rate-limit problem `fetchDominance` documents in
+- **Candidates is capped to the top 100 coins by market cap**, on top of the
+  $100M turnover floor — a floor alone admits non-crypto Bybit listings (XAU,
+  CL, SOXL). The cap list can't be fetched from the Worker itself: same
+  shared-egress-IP rate-limit problem `fetchDominance` documents in
   `src/weather.js`. So `src/marketcap.js` fetches it FROM THE DEVICE
-  (CoinGecko, then CoinPaprika) and relays it to `/movers` as `?top100=`,
-  exactly like `?etf=` relays a device-fetched number into scoring — the
-  ranking itself still happens server-side in `rankMovers()`
-  (`worker/src/compute/movers.js`). Cached 24h in `localStorage.ppd_top100`
-  since cap rank barely moves day to day. If both vendors are unreachable and
-  nothing is cached, `?top100=` is simply omitted and the tab falls back to
-  its prior whole-market ranking rather than showing nothing.
+  (CoinGecko, then CoinPaprika) and relays it to `/candidates` as `?top100=`,
+  exactly like `?etf=` relays a device-fetched number into scoring. Cached 24h
+  in `localStorage.ppd_top100`. If both vendors are unreachable and nothing is
+  cached, `?top100=` is omitted, the Worker screens unfiltered, and the tab
+  shows a warning banner rather than a silently wider list.
 
 - **The Chart tab is an OKX-only read, and it says so.** Every other per-asset
   number comes through the Worker (Bybit primary, OKX fallback); the chart
@@ -459,7 +443,7 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
 Answers a plain question the phone dashboard never tried to: not "what's the
 score" but "why did the market move." Deliberately outside the four-question
 scoring framework — `compute/digest.js` is never imported by `score.js`,
-`verdict.js`, `absorption.js` or `regime.js`, same boundary `movers.js` and
+`verdict.js`, `absorption.js` or `regime.js`, same boundary `anchored.js` and
 `liquidity.js` already hold.
 
 **On-demand only, by design.** The owner's own Telegram chat sends `/digest`,

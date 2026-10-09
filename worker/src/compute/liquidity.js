@@ -6,7 +6,7 @@ import { sweepState } from './sweep.js';
  *
  * DISPLAY-ONLY, like orderblock.js and regime.js: it feeds no score, and
  * `liquidity.test.js` asserts by source inspection that score.js, verdict.js,
- * absorption.js, regime.js, movers.js and the Worker's index.js never mention
+ * absorption.js, regime.js and the Worker's index.js never mention
  * it.
  *
  * IT DELIBERATELY DOES NOT LABEL A POOL "INDUCEMENT" OR "DRAW TARGET". Which
