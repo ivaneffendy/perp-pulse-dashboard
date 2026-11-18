@@ -71,10 +71,18 @@ test('opening the tab fetches once, then reuses what is on screen', () => {
   assert.equal(want({ trigger: 'open', loaded: true }), false);
 });
 
-test('Refresh refetches only while the Candidates tab is open', () => {
+test('Refresh refetches only while the Candidates or Extended tab is open', () => {
   assert.equal(want({ trigger: 'refresh', activeTab: 'candidates', loaded: true }), true);
+  assert.equal(want({ trigger: 'refresh', activeTab: 'extended', loaded: true }), true);
   assert.equal(want({ trigger: 'refresh', activeTab: 'matrix', loaded: false }), false);
   assert.equal(want({ trigger: 'refresh', activeTab: 'chart', loaded: true }), false);
+});
+
+test('opening Matrix or Chart never fetches candidates; opening Extended does', () => {
+  assert.equal(want({ trigger: 'open', activeTab: 'matrix', loaded: false }), false);
+  assert.equal(want({ trigger: 'open', activeTab: 'chart', loaded: false }), false);
+  assert.equal(want({ trigger: 'open', activeTab: 'extended', loaded: false }), true);
+  assert.equal(want({ trigger: 'open', activeTab: 'extended', loaded: true }), false);
 });
 
 test('automatic reloads (timer, ETF toggle, tab return) never fetch candidates', () => {

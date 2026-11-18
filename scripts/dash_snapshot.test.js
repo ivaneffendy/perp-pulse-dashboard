@@ -108,6 +108,25 @@ test('a failed /ltf degrades the LTF read to null', async () => {
   assert.equal(s.ltf, null);
 });
 
+test('rsi4h comes from a separate 200-bar /candles call, as /candidates uses', async () => {
+  // Invented: closes rising by 1 on the 200-bar call, flat on the 90-bar one.
+  const rising = Array.from({ length: 199 }, (_, i) => ({ t: i * 14_400_000, o: 1, h: 1, l: 1, c: 100 + i, v: 1 }));
+  const f = happy({
+    '/candles': (u) => ({ bars: u.searchParams.get('limit') === '200' ? rising : BARS, source: 'Fake venue' }),
+  });
+  const s = await snapshot('FAKE', { fetchFn: f, now: NOW });
+  assert.equal(s.rsi4h, 100);
+  const limits = f.calls.filter((u) => u.pathname === '/candles').map((u) => u.searchParams.get('limit')).sort();
+  assert.deepEqual(limits, ['200', '90'], 'the liquidity line keeps its own 90-bar call');
+  assert.match(s.liq, /^LIQ 4H FAKE \| /);
+});
+
+test('a failed /candles leaves rsi4h null, not a failed snapshot', async () => {
+  const s = await snapshot('FAKE', { fetchFn: happy({ '/candles': new Error('no candles') }), now: NOW });
+  assert.equal(s.rsi4h, null);
+  assert.equal(s.score.total, -2);
+});
+
 test('a failed /asset is no snapshot at all', async () => {
   await assert.rejects(
     snapshot('FAKE', { fetchFn: happy({ '/asset': new Error('Not listed') }), now: NOW }),

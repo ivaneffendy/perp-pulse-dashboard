@@ -17,6 +17,8 @@
  * listed in `errors`.
  */
 import { findLiquidity } from '../worker/src/compute/liquidity.js';
+import { rsi } from '../worker/src/compute/rsi.js';
+import { CANDIDATES } from '../worker/src/compute/candidates.js';
 import { VALID_BASE } from '../worker/src/pairs.js';
 import { liqLine } from '../src/liq-line.js';
 
@@ -25,6 +27,11 @@ const TIMEOUT_MS = 15000;
 // Same as src/chart.js COMPUTE_BARS: the liquidity scan must see the history
 // the Chart tab sees, or the line stops matching the screen.
 const COMPUTE_BARS = 90;
+// Same as /candidates: the RSI recorded on a read must be the number the
+// Extended tab showed, and Wilder smoothing depends on the history length.
+// A second /candles call, not a wider first one, so the liquidity line keeps
+// seeing exactly the Chart tab's bars.
+const RSI_BARS = CANDIDATES.bars;
 
 async function get(fetchFn, api, path, search = {}) {
   const url = new URL(api);
@@ -61,10 +68,12 @@ export async function snapshot(symbol, { api = DEFAULT_API, fetchFn = fetch, now
   const macro = await soft(get(fetchFn, api, '/macro'));
   const etf = etfOf(symbol, macro);
   const asset = await get(fetchFn, api, '/asset', { symbol, etf: etf.usd ?? undefined });
-  const [ltf, candles] = await Promise.all([
+  const [ltf, candles, rsiCandles] = await Promise.all([
     soft(get(fetchFn, api, '/ltf', { symbol })),
     soft(get(fetchFn, api, '/candles', { symbol, limit: COMPUTE_BARS })),
+    soft(get(fetchFn, api, '/candles', { symbol, limit: RSI_BARS })),
   ]);
+  const rsi4h = rsiCandles?.bars?.length ? rsi(rsiCandles.bars.map((b) => b.c)) : null;
 
   let liq = null;
   if (candles?.bars?.length) {
@@ -90,6 +99,7 @@ export async function snapshot(symbol, { api = DEFAULT_API, fetchFn = fetch, now
     mode: sig.mode ?? null,
     ltf: ltf ? { label: ltf.label, rvol: ltf.rvol, anchored: !!ltf.anchored } : null,
     liq,
+    rsi4h,
     errors,
   };
 }

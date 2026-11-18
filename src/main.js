@@ -4,6 +4,7 @@ import { renderDetail } from './detail.js';
 import { renderWeather, initEtfToggle, fetchDominance } from './weather.js';
 import { enrichBinance } from './binance-enrich.js';
 import { renderCandidates, shouldFetchCandidates } from './candidates.js';
+import { renderExtended } from './extended.js';
 import { fetchTop100Bases } from './marketcap.js';
 import { renderChart, invalidateChartCache } from './chart.js';
 import { VALID_BASE } from '../worker/src/pairs.js';
@@ -117,15 +118,16 @@ function closeDetail() {
 }
 
 /**
- * Visibility toggle between Matrix, Candidates and Chart. Matrix never fetches
- * on switch — it rides the Refresh cadence (see load()). Chart and Candidates
- * are fetched on demand, because pre-loading them for a tab nobody is looking
- * at just burns exchange calls: Chart one symbol's candles (renderChartTab),
- * Candidates ~21 calls (shouldFetchCandidates in candidates.js).
+ * Visibility toggle between Matrix, Candidates, Extended and Chart. Matrix
+ * never fetches on switch — it rides the Refresh cadence (see load()). Chart
+ * and Candidates are fetched on demand, because pre-loading them for a tab
+ * nobody is looking at just burns exchange calls: Chart one symbol's candles
+ * (renderChartTab), Candidates ~21 calls (shouldFetchCandidates in
+ * candidates.js). Extended renders the Candidates response; it has no fetch.
  */
 function selectTab(name) {
   activeTab = name;
-  for (const t of ['matrix', 'candidates', 'chart']) {
+  for (const t of ['matrix', 'candidates', 'extended', 'chart']) {
     $(`view-${t}`).hidden = name !== t;
     $(`tab-${t}`).classList.toggle('active', name === t);
     $(`tab-${t}`).setAttribute('aria-selected', String(name === t));
@@ -145,8 +147,12 @@ function loadCandidates() {
   fetchTop100Bases().catch(() => null)
     .then(fetchCandidates)
     .then(
-      (d) => { candidatesLoaded = true; renderCandidates(d, fmtWib(d.ts)); },
-      () => renderCandidates(null),
+      (d) => {
+        candidatesLoaded = true;
+        renderCandidates(d, fmtWib(d.ts));
+        renderExtended(d, fmtWib(d.ts));
+      },
+      () => { renderCandidates(null); renderExtended(null); },
     )
     .finally(() => { candidatesInFlight = false; });
 }
@@ -400,6 +406,7 @@ window.addEventListener('resize', () => {
 });
 $('tab-matrix').addEventListener('click', () => selectTab('matrix'));
 $('tab-candidates').addEventListener('click', () => selectTab('candidates'));
+$('tab-extended').addEventListener('click', () => selectTab('extended'));
 $('tab-chart').addEventListener('click', () => selectTab('chart'));
 
 $('wl-input').addEventListener('keydown', (e) => {

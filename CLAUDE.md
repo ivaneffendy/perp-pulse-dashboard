@@ -26,7 +26,9 @@ Phone browser (GitHub Pages, static, no build step)
   ├─ GET /candidates          ─▶ Worker ─▶ tickers (1) + 4H klines per coin (≤ 20,
   │       │                      same venue as the tickers, no retries)
   │       └─ pre-screen: 4H trend + pullback into the anchored range, never scored.
-  │          ON DEMAND ONLY — opening the tab, or Refresh while it is open
+  │          Each item also carries `rsi4h`, which the Extended tab renders.
+  │          ON DEMAND ONLY — opening Candidates or Extended, or Refresh while
+  │          one of them is open
   ├─ GET /ltf?symbol=X       ─▶ Worker ─▶ Bybit 15m klines (1 call, OKX fallback)
   │    └─ ON DEMAND ONLY — a button press, never the refresh loop
   ├─ GET /candles?symbol=X   ─▶ Worker ─▶ Bybit 4H klines (1 call, OKX fallback)
@@ -68,6 +70,8 @@ src/
   matrix.js         Phase 1 grid + score chips
   detail.js         Phase 2 panel
   candidates.js     Candidates tab render + its fetch policy — pre-screen, no click
+  extended.js       Extended tab — 4H RSI extremes beside the 4H trend side,
+                    rendered from the Candidates response (no fetch of its own)
   lists.js          WATCHLIST / NO_TRADE pair names, mirrored from the playbook's §II
   marketcap.js      top-100-by-market-cap allowlist for Candidates, device-fetched
   chart.js          Chart tab — 4H candles + POI overlay + liquidity rail,
@@ -82,14 +86,16 @@ worker/src/
   compute/          klines · ema · fvg · equilibrium · sweep · mode · walls
                     · absorption  (§IV Step 2, /ltf only) · regime
                     · anchored · candidates  (/candidates pre-screen — never scored)
+                    · rsi  (Extended tab + chart-read snapshot — never scored)
                     · orderblock · liquidity  (chart overlay only — never scored)
                     · digest  (/telegram "what's driving price" — never scored)
   score.js          §VII bias engine        ─┐ four separate questions,
   verdict.js        Phase 2 pullback health  │ NEVER summed or averaged
   compute/absorption.js  §IV Step 2 LTF read ─┘
-worker/test/        node --test suites (228 tests)
+worker/test/        node --test suites (246 tests, 2026-11-18)
 scripts/            journal backfills (R11 MFE, R11b SL counterfactual)
-                    + their own node --test suites (20 tests)
+                    + dash_snapshot.js (chart-read snapshot)
+                    + their own node --test suites (36 tests, 2026-11-18)
 ```
 
 Run tests: `cd worker && npm test` **and** `cd scripts && npm test` — two
@@ -132,6 +138,14 @@ four-question framework entirely — a cross-market pre-screen, not scored.
 `worker/test/anchored.test.js` asserts by source inspection that `score.js`,
 `verdict.js`, `absorption.js` and `regime.js` never import them. Spec:
 `docs/superpowers/specs/2026-10-09-candidates-screener-design.md`.
+
+`compute/rsi.js` (added 2026-11-18) is outside it too: 4H RSI(14) for the
+Extended tab and the chart-read snapshot's `rsi4h`. `worker/test/rsi.test.js`
+guards it the same way. **Every Extended row shows the 4H trend side beside
+the RSI, and that is the design, not decoration.** RSI stays extreme for days
+in a trend, so a bare "overbought" list reads as a list of fades, which is
+the losing pattern the owner's journal records. Spec:
+`docs/superpowers/specs/2026-11-18-extended-tab-design.md`.
 
 **The Movers tab was removed 2026-10-09** (operator: not used once Candidates
 existed). It ranked by the size of the 24h move vs BTC, so its top rows were
@@ -316,9 +330,11 @@ Thresholds live in one place: `THRESHOLDS` in `worker/src/score.js`.
   on demand, because pre-loading candles for coins nobody is looking at would
   cost a request per watchlist entry per refresh. They are then cached until
   the next Refresh press, so flipping tabs or symbols re-asks nothing. And
-  opening the Candidates tab fetches `/candidates` once (~21 exchange calls);
-  Refresh refetches it only while that tab is open, and the 5m timer never
-  does (`shouldFetchCandidates` in `src/candidates.js`). One refresh = 1 macro + N
+  opening the Candidates or Extended tab fetches `/candidates` once (~21
+  exchange calls); Refresh refetches it only while one of them is open, and
+  the 5m timer never does (`shouldFetchCandidates` in `src/candidates.js`).
+  Opening Matrix or Chart never fetches it — until 2026-11-18 it did, on the
+  first tab switch of the session, because the gate ignored the tab. One refresh = 1 macro + N
   asset requests (~33 upstream exchange calls at N=8), and the binding
   constraint is never Cloudflare (auto at 5 min over an 8h day is ~860
   requests, under 1% of the 100k/day free limit) — it is the exchanges.

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleCandidates } from '../src/index.js';
+import { rsi } from '../src/compute/rsi.js';
 
 const H4 = 4 * 60 * 60 * 1000;
 const ok = (body) => new Response(JSON.stringify(body), { status: 200 });
@@ -81,9 +82,26 @@ test('item keys are exactly the documented shape, with no scoring leakage', asyn
   for (const item of JSON.parse(raw).items) {
     assert.deepEqual(Object.keys(item).sort(), [
       'base', 'bosAgeBars', 'distToProtectedPct', 'extreme', 'last', 'pctOfRange',
-      'protected', 'side', 'status', 'turnover24h',
+      'protected', 'rsi4h', 'side', 'status', 'turnover24h',
     ]);
   }
+});
+
+test('rsi4h is the 4H RSI of the same closed bars, at no extra exchange call', async () => {
+  const v = venue();
+  const res = await withFetch(v.impl, () => handleCandidates(new URL(CAND)));
+  const b = await res.json();
+  const want = rsi(LEG.map(([, , c]) => c));
+  assert.ok(Number.isFinite(want));
+  for (const item of b.items) assert.equal(item.rsi4h, want);
+  assert.equal(v.calls.length, 1 + 3);
+});
+
+test('an error row carries rsi4h null', async () => {
+  const v = venue({ kline: () => new Response('blocked', { status: 403 }) });
+  const res = await withFetch(v.impl, () => handleCandidates(new URL(CAND)));
+  const b = await res.json();
+  assert.ok(b.items.every((x) => x.status === 'error' && x.rsi4h === null));
 });
 
 test('klines come from the venue that served the tickers (OKX when Bybit is blocked)', async () => {

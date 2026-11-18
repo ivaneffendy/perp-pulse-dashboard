@@ -17,14 +17,17 @@ const age = (bars) => {
  * Candidates cost ~21 exchange calls per fetch, so they load only when looked
  * at: once on opening the tab, again on a Refresh press while it is open, and
  * never from an automatic reload (the 5m timer, the ETF toggle, tab return).
+ * The Extended tab renders the same response, so it counts as looking at it.
  * @param {{trigger:'open'|'refresh'|'auto', activeTab:string, loaded:boolean, inFlight:boolean}} s
  */
 export function shouldFetchCandidates({ trigger, activeTab, loaded, inFlight }) {
-  if (inFlight) return false;
+  if (inFlight || !CANDIDATE_TABS.has(activeTab)) return false;
   if (trigger === 'open') return !loaded;
-  if (trigger === 'refresh') return activeTab === 'candidates';
-  return false;
+  return trigger === 'refresh';
 }
+
+/** Tabs that render the /candidates response. */
+export const CANDIDATE_TABS = new Set(['candidates', 'extended']);
 
 export function candidatesHtml(data, { watchlist = WATCHLIST, asOf = null } = {}) {
   if (!data || !Array.isArray(data.items)) {

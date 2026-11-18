@@ -23,6 +23,7 @@ import { marketMode } from './compute/mode.js';
 import { regime } from './compute/regime.js';
 import { anchoredRange, ANCHORED } from './compute/anchored.js';
 import { selectUniverse, sortCandidates, CANDIDATES } from './compute/candidates.js';
+import { rsi } from './compute/rsi.js';
 import { scoreAsset } from './score.js';
 import { verdict } from './verdict.js';
 import { fetchFlashes } from './sources/mktnews.js';
@@ -453,11 +454,16 @@ export async function handleCandidates(url) {
       const head = { base: t.base, turnover24h: t.turnover24h, last: t.last };
       try {
         const { bars } = await candles(resolvePair(t.base), now, CANDIDATES.bars, once);
-        return { ...head, ...anchoredRange(bars, t.last, { ...ANCHORED, swingWidth: CANDIDATES.swingWidth }) };
+        return {
+          ...head,
+          ...anchoredRange(bars, t.last, { ...ANCHORED, swingWidth: CANDIDATES.swingWidth }),
+          // Extended tab: same closed 4H bars, so no extra exchange call.
+          rsi4h: rsi(bars.map((b) => b.c)),
+        };
       } catch (e) {
         return {
           ...head, side: null, protected: null, extreme: null, pctOfRange: null,
-          distToProtectedPct: null, bosAgeBars: null, status: 'error', detail: e.message,
+          distToProtectedPct: null, bosAgeBars: null, rsi4h: null, status: 'error', detail: e.message,
         };
       }
     }),

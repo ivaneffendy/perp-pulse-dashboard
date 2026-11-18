@@ -28,6 +28,7 @@
 <nav class="tabs" role="tablist">
   <button id="tab-matrix" class="tab active" role="tab" aria-selected="true">Matrix</button>
   <button id="tab-candidates" class="tab" role="tab" aria-selected="false">Candidates</button>
+  <button id="tab-extended" class="tab" role="tab" aria-selected="false">Extended</button>
   <button id="tab-chart" class="tab" role="tab" aria-selected="false">Chart</button>
 </nav>
 
@@ -56,6 +57,13 @@
 <section id="view-candidates" hidden>
   <p class="cand-note">4H trend + pullback into the anchored range — ≥ $100M turnover, top 100 by market cap. A pre-screen: the chart read decides. <b>off-list</b> = outside the current watchlist. Loads when this tab opens; Refresh here reloads it.</p>
   <div id="candidates-list" class="cand-list">
+    <p class="cand-empty">Loading…</p>
+  </div>
+</section>
+
+<section id="view-extended" hidden>
+  <p class="cand-note">4H RSI(14) on closed bars, at ≤ 30 (OS) or ≥ 70 (OB); ≤ 20 / ≥ 80 is extreme. Same coins as Candidates, same fetch. <b>Information only, never a signal.</b> <b>with trend</b> = stretched in the 4H trend's direction: late, wait for the pullback. <b>against trend</b> = stretched against it: a reversal still needs a 4H body-close break of structure (§III.0). RSI stays extreme for days in a trend, so fading "exhausted" moves loses.</p>
+  <div id="extended-list" class="cand-list">
     <p class="cand-empty">Loading…</p>
   </div>
 </section>
